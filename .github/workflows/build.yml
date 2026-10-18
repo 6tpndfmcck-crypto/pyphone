@@ -19,7 +19,7 @@ jobs:
           gh release download "$TAG" --repo beeware/Python-Apple-support --pattern 'Python-3.13-iOS-support.*.tar.gz'
           mkdir -p py
           tar -xzf Python-3.13-iOS-support.*.tar.gz -C py
-          X=$(find py -maxdepth 2 -name Python.xcframework | head -1)
+          X=$(find py -maxdepth 3 -name Python.xcframework -type d | head -1)
           mv "$X" ./Python.xcframework
           echo "--- Python.xcframework contents ---"
           ls -la Python.xcframework
