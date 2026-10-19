@@ -10,12 +10,16 @@ enum Vocab {
         words("False None True and as assert async await break case class continue def del elif else except finally for from global if import in is lambda match nonlocal not or pass raise return try while with yield")
         + words("abs all any bin bool bytes callable chr dict dir divmod enumerate eval exec filter float format frozenset getattr globals hasattr hash hex id input int isinstance issubclass iter len list locals map max min next object oct open ord pow print property range repr reversed round set setattr slice sorted staticmethod str sum super tuple type vars zip")
         + words("Exception ValueError TypeError KeyError IndexError RuntimeError StopIteration KeyboardInterrupt ZeroDivisionError AttributeError ImportError NameError OSError")
-        + words("math random time json os sys datetime re string collections itertools functools threading statistics decimal fractions copy textwrap base64 hashlib uuid pathlib typing dataclasses enum csv sqlite3 urllib heapq bisect")
+        + words("math random time json os sys datetime re string numpy collections itertools functools threading statistics decimal fractions copy textwrap base64 hashlib uuid pathlib typing dataclasses enum csv sqlite3 urllib heapq bisect")
         + words("ui label entry button clear")
 
     static let generic: [String] = words("append extend insert remove pop sort reverse index count join split strip lstrip rstrip replace upper lower title capitalize format startswith endswith find keys values items get update add copy clear isdigit isalpha")
 
+    private static let npWords = words("array arange linspace zeros ones empty full eye identity random sum mean median std var min max argmax argmin dot matmul sqrt exp log sin cos tan abs reshape shape concatenate stack vstack hstack where sort argsort unique cumsum prod transpose linalg pi e inf nan ndarray float64 int64 round floor ceil clip diff any all isnan zeros_like ones_like")
+
     static let members: [String: [String]] = [
+        "numpy": npWords,
+        "np": npWords,
         "math": words("pi e tau inf nan sqrt pow exp log log2 log10 sin cos tan asin acos atan atan2 sinh cosh tanh floor ceil fabs factorial gcd lcm hypot degrees radians isclose isnan isinf trunc comb perm prod dist fsum"),
         "random": words("random randint randrange choice choices shuffle sample uniform gauss seed betavariate expovariate"),
         "time": words("time sleep monotonic perf_counter process_time strftime localtime gmtime ctime"),
