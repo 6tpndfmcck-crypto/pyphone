@@ -1,8 +1,10 @@
 #!/bin/bash
 # Copies the Python standard library into the app and turns each binary
 # extension module (.so) into a framework, which iOS requires.
-# Finds the stdlib by searching for the "encodings" package, so it does not
-# depend on the exact folder layout of the Python.xcframework release.
+#
+# Package layout (BeeWare Python-Apple-support 3.13):
+#   Python.xcframework/lib/python3.13/                      <- shared pure-Python stdlib
+#   Python.xcframework/<slice>/lib-<arch>/python3.13/lib-dynload/  <- per-slice .so modules
 set -e
 APP="${CODESIGNING_FOLDER_PATH%/}"
 XC="$PROJECT_DIR/Python.xcframework"
@@ -14,9 +16,10 @@ else
 fi
 echo "Using slice: $SLICE"
 
-ENC=$(find "$SLICE" -type d -name encodings -path '*/python3.*/encodings' | head -1)
+# Shared stdlib: any python3.x folder that contains "encodings".
+ENC=$(find "$XC" -type d -path '*/python3.*/encodings' | sort | head -1)
 if [ -z "$ENC" ]; then
-  echo "error: no python3.x/encodings found under $SLICE. Layout is:" >&2
+  echo "error: no python3.x/encodings found under $XC. Layout is:" >&2
   find "$XC" -maxdepth 4 -type d | head -60 >&2
   exit 1
 fi
@@ -24,18 +27,17 @@ STDLIB=$(dirname "$ENC")
 PYVER=$(basename "$STDLIB")
 echo "Stdlib source: $STDLIB ($PYVER)"
 
+# Binary modules for this slice (prefer arm64).
+DYN=$(find "$SLICE" -type d -name lib-dynload | sort | grep arm64 | head -1 || true)
+[ -z "$DYN" ] && DYN=$(find "$SLICE" -type d -name lib-dynload | sort | head -1)
+echo "lib-dynload source: ${DYN:-none found}"
+
 DEST="$APP/python/lib/$PYVER"
 mkdir -p "$DEST"
-rsync -a --delete "$STDLIB/" "$DEST/"
-
-# If lib-dynload was kept outside the stdlib folder, bring it in.
-if [ -z "$(ls -A "$DEST/lib-dynload" 2>/dev/null)" ]; then
-  DYN=$(find "$SLICE" -type d -name lib-dynload | head -1)
-  if [ -n "$DYN" ]; then
-    echo "Copying lib-dynload from $DYN"
-    mkdir -p "$DEST/lib-dynload"
-    rsync -a "$DYN/" "$DEST/lib-dynload/"
-  fi
+rsync -a --delete --exclude '/test/' --exclude '__pycache__/' "$STDLIB/" "$DEST/"
+if [ -n "$DYN" ]; then
+  mkdir -p "$DEST/lib-dynload"
+  rsync -a "$DYN/" "$DEST/lib-dynload/"
 fi
 
 install_dylib () {
