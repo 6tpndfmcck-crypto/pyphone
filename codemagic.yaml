@@ -117,6 +117,37 @@ workflows:
           zip -qry PyPhone_ipa.zip PyPhone.ipa
           ls -lh PyPhone.ipa PyPhone_ipa.zip
 
+      - name: Verify build before publishing artifacts
+        script: |
+          set -euo pipefail
+          APP_PATH="build/Build/Products/Release-iphoneos/PyPhone.app"
+
+          echo "Checking app bundle..."
+          test -d "$APP_PATH"
+          test -f "$APP_PATH/Info.plist"
+          plutil -lint "$APP_PATH/Info.plist"
+          test -f "$APP_PATH/python/lib/python3.13/encodings/__init__.py"
+          test -f "$APP_PATH/app_packages/numpy/__init__.py"
+
+          echo "Checking NumPy native frameworks..."
+          find "$APP_PATH/Frameworks" -maxdepth 1 -name 'numpy*framework' -print | grep -q .
+
+          echo "Checking IPA archive and required app path..."
+          test -s PyPhone.ipa
+          unzip -tq PyPhone.ipa
+          unzip -Z1 PyPhone.ipa | grep -Fxq "Payload/PyPhone.app/Info.plist"
+
+          echo "Checking downloadable ZIP and embedded IPA..."
+          test -s PyPhone_ipa.zip
+          unzip -tq PyPhone_ipa.zip
+          unzip -Z1 PyPhone_ipa.zip | grep -Fxq "PyPhone.ipa"
+          unzip -p PyPhone_ipa.zip PyPhone.ipa > /tmp/PyPhone_check.ipa
+          unzip -tq /tmp/PyPhone_check.ipa
+          unzip -Z1 /tmp/PyPhone_check.ipa | grep -Fxq "Payload/PyPhone.app/Info.plist"
+
+          echo "All checks passed. Ready for artifact publishing."
+          ls -lh PyPhone.ipa PyPhone_ipa.zip
+
     artifacts:
       - PyPhone_ipa.zip
       - PyPhone.ipa
