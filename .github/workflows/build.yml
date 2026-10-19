@@ -19,11 +19,26 @@ jobs:
           gh release download "$TAG" --repo beeware/Python-Apple-support --pattern 'Python-3.13-iOS-support.*.tar.gz'
           mkdir -p py
           tar -xzf Python-3.13-iOS-support.*.tar.gz -C py
-          X=$(find py -maxdepth 3 -name Python.xcframework -type d | head -1)
+
+          # Preserve the standard library before moving the XCFramework out of
+          # the support archive. The framework's lib/ directory only contains
+          # libpython3.13.dylib, not the Python standard library.
+          STDLIB=$(find py -type d -path '*/python/lib/python3.13' -print -quit)
+          if [ -z "$STDLIB" ]; then
+            echo "Could not find Python 3.13 standard library in the support archive."
+            find py -maxdepth 7 -type d | head -100
+            exit 1
+          fi
+          mkdir -p python-stdlib/python3.13
+          rsync -a "$STDLIB/" python-stdlib/python3.13/
+
+          X=$(find py -maxdepth 6 -name Python.xcframework -type d | head -1)
+          test -n "$X" || { echo "Python.xcframework not found"; exit 1; }
           mv "$X" ./Python.xcframework
           echo "--- Python.xcframework contents ---"
           ls -la Python.xcframework
           test -f Python.xcframework/Info.plist || { echo "Python.xcframework/Info.plist missing"; exit 1; }
+          test -f python-stdlib/python3.13/encodings/__init__.py || { echo "Python stdlib encodings missing from support archive"; exit 1; }
 
       - uses: actions/setup-python@v5
         with:
@@ -40,6 +55,8 @@ jobs:
             --only-binary=:all: \
             --extra-index-url https://pypi.anaconda.org/beeware/simple
           rm -rf app_packages/bin
+          test -d app_packages/numpy || { echo "NumPy was not installed"; exit 1; }
+          echo "--- Installed packages ---"
           ls app_packages
 
       - name: Install XcodeGen
@@ -58,14 +75,19 @@ jobs:
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
             build
 
-      - name: Check Python is inside the app
+      - name: Check Python and NumPy are inside the app
         run: |
           APP=build/Build/Products/Release-iphoneos/CodeWindow.app
-          echo "--- python/lib ---"; ls "$APP/python/lib"
-          echo "--- stdlib sample ---"; ls "$APP"/python/lib/python3*/ | head -15
-          test -f "$APP"/python/lib/python3*/encodings/__init__.py || { echo "encodings missing from app"; exit 1; }
-          echo "--- Frameworks ---"; ls "$APP/Frameworks" | head -10
-          echo "--- app_packages ---"; ls "$APP/app_packages" | head -20
+          echo "--- python/lib ---"
+          ls "$APP/python/lib"
+          test -f "$APP/python/lib/python3.13/encodings/__init__.py" || { echo "Python standard library missing from app"; exit 1; }
+          echo "--- NumPy package ---"
+          test -f "$APP/app_packages/numpy/__init__.py" || { echo "NumPy package missing from app"; exit 1; }
+          echo "--- NumPy native modules ---"
+          find "$APP/Frameworks" -maxdepth 1 -name 'numpy*framework' -print
+          find "$APP/Frameworks" -maxdepth 1 -name 'numpy*framework' | grep -q . || { echo "NumPy native extension frameworks missing"; exit 1; }
+          echo "--- app_packages ---"
+          ls "$APP/app_packages" | head -20
 
       - name: Package IPA
         run: |
