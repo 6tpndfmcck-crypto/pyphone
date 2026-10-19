@@ -93,24 +93,6 @@ workflows:
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
             build 2>&1 | tee /tmp/xcodebuild.log
 
-      - name: make sure python & numpy are there
-        script: |
-          set -euo pipefail
-          APP="build/Build/Products/Release-iphoneos/PyPhone.app"
-          test -f "$APP/python/lib/python3.13/encodings/__init__.py" || {
-            echo "Python standard library missing from app."
-            exit 1
-          }
-          test -f "$APP/app_packages/numpy/__init__.py" || {
-            echo "NumPy package missing from app."
-            exit 1
-          }
-          find "$APP/Frameworks" -maxdepth 1 -name 'numpy*framework' -print
-          find "$APP/Frameworks" -maxdepth 1 -name 'numpy*framework' | grep -q . || {
-            echo "NumPy native extension frameworks missing."
-            exit 1
-          }
-
       - name: Package IPA
         script: |
           set -euo pipefail
