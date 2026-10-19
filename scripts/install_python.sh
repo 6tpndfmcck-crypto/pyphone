@@ -1,49 +1,32 @@
 #!/bin/bash
 # Copies the Python standard library into the app and turns each binary
 # extension module (.so) into a framework, which iOS requires.
-#
-# Package layout (BeeWare Python-Apple-support 3.13):
-#   Python.xcframework/lib/python3.13/                      <- shared pure-Python stdlib
-#   Python.xcframework/<slice>/lib-<arch>/python3.13/lib-dynload/  <- per-slice .so modules
 set -e
-APP="${CODESIGNING_FOLDER_PATH%/}"
+APP="$CODESIGNING_FOLDER_PATH"
 XC="$PROJECT_DIR/Python.xcframework"
 
 if [ "$EFFECTIVE_PLATFORM_NAME" = "-iphonesimulator" ]; then
-  SLICE=$(ls -d "$XC"/ios-*simulator* | head -1)
+  SLICE="ios-arm64_x86_64-simulator"
 else
-  SLICE=$(ls -d "$XC"/ios-* | grep -v simulator | head -1)
+  SLICE="ios-arm64"
 fi
-echo "Using slice: $SLICE"
 
-# Shared stdlib: any python3.x folder that contains "encodings".
-ENC=$(find "$XC" -type d -path '*/python3.*/encodings' | sort | head -1)
-if [ -z "$ENC" ]; then
-  echo "error: no python3.x/encodings found under $XC. Layout is:" >&2
-  find "$XC" -maxdepth 4 -type d | head -60 >&2
+if [ ! -d "$XC/$SLICE/lib" ]; then
+  echo "error: $XC/$SLICE/lib not found. Layout is:" >&2
+  ls -R "$XC" | head -40 >&2
   exit 1
 fi
-STDLIB=$(dirname "$ENC")
-PYVER=$(basename "$STDLIB")
-echo "Stdlib source: $STDLIB ($PYVER)"
 
-# Binary modules for this slice (prefer arm64).
-DYN=$(find "$SLICE" -type d -name lib-dynload | sort | grep arm64 | head -1 || true)
-[ -z "$DYN" ] && DYN=$(find "$SLICE" -type d -name lib-dynload | sort | head -1)
-echo "lib-dynload source: ${DYN:-none found}"
+mkdir -p "$APP/python/lib"
+rsync -au --delete "$XC/$SLICE/lib/" "$APP/python/lib/"
 
-DEST="$APP/python/lib/$PYVER"
-mkdir -p "$DEST"
-rsync -a --delete --exclude '/test/' --exclude '__pycache__/' "$STDLIB/" "$DEST/"
-if [ -n "$DYN" ]; then
-  mkdir -p "$DEST/lib-dynload"
-  rsync -a "$DYN/" "$DEST/lib-dynload/"
-fi
+PYVER=$(ls -1 "$APP/python/lib" | grep '^python3' | head -1)
+echo "Python lib folder: $PYVER"
 
 install_dylib () {
-  FULL_EXT="$1"
+  BASE="$1"
+  FULL_EXT="$2"
   RELATIVE_EXT="${FULL_EXT#$APP/}"
-  BASE="python/lib/$PYVER/lib-dynload/"
   PYTHON_EXT="${RELATIVE_EXT#$BASE}"
   MODULE=$(echo "$PYTHON_EXT" | cut -d "." -f 1 | tr "/" ".")
   BUNDLE_ID=$(echo "$PRODUCT_BUNDLE_IDENTIFIER.$MODULE" | tr "_" "-")
@@ -73,9 +56,15 @@ PLIST
   echo "${RELATIVE_EXT%.so}.fwork" > "$APP/$FW/$MODULE.origin"
 }
 
-if [ -d "$DEST/lib-dynload" ]; then
-  find "$DEST/lib-dynload" -name "*.so" | while read -r EXT; do
-    install_dylib "$EXT"
+find "$APP/python/lib/$PYVER/lib-dynload" -name "*.so" | while read -r EXT; do
+  install_dylib "python/lib/$PYVER/lib-dynload/" "$EXT"
+done
+
+# Binary modules from installed packages (numpy etc.)
+if [ -d "$APP/app_packages" ]; then
+  echo "Install package extension modules..."
+  find "$APP/app_packages" -name "*.so" | while read -r EXT; do
+    install_dylib "app_packages/" "$EXT"
   done
 fi
-echo "Done. Stdlib installed at $DEST"
+echo "Done."
