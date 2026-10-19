@@ -56,7 +56,7 @@ workflows:
           mkdir -p py
           tar -xzf Python-3.13-iOS-support.tar.gz -C py
 
-          STDLIB="$(find py -type d -path '*/python/lib/python3.13' -print -quit)"
+          STDLIB="$(find py -type d -path '*/lib/python3.13' -print -quit)"
           if [ -z "$STDLIB" ]; then
             echo "Could not find Python 3.13 standard library in the support archive."
             find py -maxdepth 7 -type d | head -100
@@ -133,6 +133,6 @@ workflows:
           ls -lh PythonWindow.ipa
 
     artifacts:
-      - PyPhone.ipa
+      - PythonWindow.ipa
       - build/Build/Products/Release-iphoneos/CodeWindow.app
       - /tmp/xcodebuild.log
