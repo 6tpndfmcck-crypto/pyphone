@@ -129,6 +129,13 @@ workflows:
           test -f "$APP_PATH/python/lib/python3.13/encodings/__init__.py"
           test -f "$APP_PATH/app_packages/numpy/__init__.py"
 
+          echo "Checking Python standard-library native frameworks..."
+          test -f "$APP_PATH/Frameworks/math.framework/math" || {
+            echo "Python math framework is missing."
+            find "$APP_PATH/Frameworks" -maxdepth 1 -iname '*math*' -print
+            exit 1
+          }
+
           echo "Checking NumPy native frameworks..."
           find "$APP_PATH/Frameworks" -maxdepth 1 -name 'numpy*framework' -print | grep -q .
 
