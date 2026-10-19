@@ -78,9 +78,13 @@ workflows:
           test -f Python.xcframework/Info.plist
           test -f python-stdlib/python3.13/encodings/__init__.py
 
+          # Use an isolated virtual environment so Homebrew's PEP 668
+          # externally-managed-environment protection is not triggered.
+          "$PYTHON_BIN" -m venv .build-venv
+          BUILD_PYTHON="$PWD/.build-venv/bin/python"
           mkdir -p app_packages
-          "$PYTHON_BIN" -m pip install --upgrade pip
-          "$PYTHON_BIN" -m pip install -r requirements.txt \
+          "$BUILD_PYTHON" -m pip install --upgrade pip
+          "$BUILD_PYTHON" -m pip install -r requirements.txt \
             --target app_packages \
             --platform ios_13_0_arm64_iphoneos \
             --implementation cp --python-version 3.13 --abi cp313 \
