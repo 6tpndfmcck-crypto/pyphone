@@ -137,9 +137,9 @@ workflows:
           mkdir Payload
           cp -R build/Build/Products/Release-iphoneos/PyPhone.app Payload/
           zip -qr PyPhone.ipa Payload
-          ls -lh PyPhone.ipa
+          ls -lh PyPhone_ipa.zip
 
     artifacts:
-      - PyPhone.ipa
+      - PyPhone_ipa.zip
       - build/Build/Products/Release-iphoneos/PyPhone.app
       - /tmp/xcodebuild.log
