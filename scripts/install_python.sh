@@ -4,6 +4,7 @@
 set -e
 APP="$CODESIGNING_FOLDER_PATH"
 XC="$PROJECT_DIR/Python.xcframework"
+STDLIB="$PROJECT_DIR/python-stdlib/python3.13"
 
 if [ "$EFFECTIVE_PLATFORM_NAME" = "-iphonesimulator" ]; then
   SLICE="ios-arm64_x86_64-simulator"
@@ -16,9 +17,18 @@ if [ ! -d "$XC/$SLICE/lib" ]; then
   ls -R "$XC" | head -40 >&2
   exit 1
 fi
+if [ ! -f "$STDLIB/encodings/__init__.py" ]; then
+  echo "error: Python standard library not staged at $STDLIB" >&2
+  exit 1
+fi
 
 mkdir -p "$APP/python/lib"
+# This directory contains libpython3.13.dylib.
 rsync -au --delete "$XC/$SLICE/lib/" "$APP/python/lib/"
+# The support archive's standard library is separate from the XCFramework's
+# lib/ directory, so copy it into the expected python/lib/python3.13 location.
+mkdir -p "$APP/python/lib/python3.13"
+rsync -au --delete "$STDLIB/" "$APP/python/lib/python3.13/"
 
 PYVER=$(ls -1 "$APP/python/lib" | grep '^python3' | head -1)
 echo "Python lib folder: $PYVER"
