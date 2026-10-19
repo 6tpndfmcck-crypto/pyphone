@@ -28,7 +28,14 @@ rsync -au --delete "$XC/$SLICE/lib/" "$APP/python/lib/"
 # The support archive's standard library is separate from the XCFramework's
 # lib/ directory, so copy it into the expected python/lib/python3.13 location.
 mkdir -p "$APP/python/lib/python3.13"
-rsync -au --delete "$STDLIB/" "$APP/python/lib/python3.13/"
+# Keep the platform-specific native modules copied from Python.xcframework.
+# The standalone stdlib archive does not contain these iOS binaries.
+rsync -au --delete --exclude='lib-dynload/' "$STDLIB/" "$APP/python/lib/python3.13/"
+test -d "$APP/python/lib/python3.13/lib-dynload"
+find "$APP/python/lib/python3.13/lib-dynload" -name 'math*.so' -print -quit | grep -q . || {
+  echo "error: math native module missing from the Python iOS framework slice" >&2
+  exit 1
+}
 
 PYVER=$(ls -1 "$APP/python/lib" | grep '^python3' | head -1)
 echo "Python lib folder: $PYVER"
