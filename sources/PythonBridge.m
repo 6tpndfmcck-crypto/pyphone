@@ -20,25 +20,45 @@ static NSString *exceptionText(void) {
 @implementation PythonBridge
 
 + (NSString *)start {
-    NSString *res = NSBundle.mainBundle.resourcePath;
+    NSFileManager *fm = NSFileManager.defaultManager;
+
+    // Find the app folder that actually holds python/lib. Try the main bundle,
+    // the bundle this class was loaded from, and the executable's folder, since
+    // apps run inside another container can report different paths.
+    NSMutableArray<NSString *> *bases = [NSMutableArray array];
+    NSArray<NSString *> *cands = @[
+        NSBundle.mainBundle.resourcePath ?: @"",
+        [NSBundle bundleForClass:self.class].resourcePath ?: @"",
+        [NSBundle.mainBundle.executablePath stringByDeletingLastPathComponent] ?: @"",
+        NSBundle.mainBundle.bundlePath ?: @"",
+    ];
+    for (NSString *c in cands) {
+        if (c.length && ![bases containsObject:c]) [bases addObject:c];
+    }
+    NSString *res = nil;
+    for (NSString *b in bases) {
+        if ([fm fileExistsAtPath:[b stringByAppendingPathComponent:@"python/lib"]]) { res = b; break; }
+    }
+    if (!res) {
+        return [NSString stringWithFormat:@"python folder not found in %@", bases];
+    }
     NSString *home = [res stringByAppendingPathComponent:@"python"];
     NSString *app = [res stringByAppendingPathComponent:@"App"];
 
-    // Find the stdlib folder (python/lib/python3.x) and report clearly if it is missing.
-    NSFileManager *fm = NSFileManager.defaultManager;
+    // Find the standard library folder, e.g. python/lib/python3.13
     NSString *libDir = [home stringByAppendingPathComponent:@"lib"];
-    NSArray *items = [fm contentsOfDirectoryAtPath:libDir error:nil];
+    NSArray<NSString *> *libItems = [fm contentsOfDirectoryAtPath:libDir error:nil];
     NSString *ver = nil;
-    for (NSString *i in items) if ([i hasPrefix:@"python3."]) ver = i;
+    for (NSString *item in libItems) {
+        if ([item hasPrefix:@"python3"]) { ver = item; break; }
+    }
     if (!ver) {
-        return [NSString stringWithFormat:@"stdlib missing: no python3.x in %@ (found: %@)",
-                libDir, items ? [items componentsJoinedByString:@", "] : @"folder does not exist"];
+        return [NSString stringWithFormat:@"no stdlib found in app (python/lib = %@)", libItems ?: @[]];
     }
     NSString *stdlib = [libDir stringByAppendingPathComponent:ver];
-    if (![fm fileExistsAtPath:[stdlib stringByAppendingPathComponent:@"encodings"]]) {
-        return [NSString stringWithFormat:@"stdlib incomplete: no encodings in %@", stdlib];
-    }
     NSString *dynload = [stdlib stringByAppendingPathComponent:@"lib-dynload"];
+    BOOL hasEnc = [fm fileExistsAtPath:[stdlib stringByAppendingPathComponent:@"encodings"]];
+    NSString *diag = [NSString stringWithFormat:@"[%@ encodings=%d]", ver, hasEnc];
 
     PyStatus status;
     PyPreConfig pre;
@@ -46,7 +66,7 @@ static NSString *exceptionText(void) {
     pre.utf8_mode = 1;
     status = Py_PreInitialize(&pre);
     if (PyStatus_Exception(status)) {
-        return [NSString stringWithFormat:@"preinit: %s", status.err_msg ?: "unknown"];
+        return [NSString stringWithFormat:@"preinit: %s %@", status.err_msg ?: "unknown", diag];
     }
 
     PyConfig config;
@@ -54,38 +74,38 @@ static NSString *exceptionText(void) {
     config.buffered_stdio = 0;
     config.write_bytecode = 0;
     config.install_signal_handlers = 0;
+
     status = PyConfig_SetBytesString(&config, &config.home, home.UTF8String);
     if (PyStatus_Exception(status)) {
         PyConfig_Clear(&config);
         return [NSString stringWithFormat:@"config: %s", status.err_msg ?: "unknown"];
     }
+    status = PyConfig_Read(&config);
+    if (PyStatus_Exception(status)) {
+        PyConfig_Clear(&config);
+        return [NSString stringWithFormat:@"read: %s %@", status.err_msg ?: "unknown", diag];
+    }
 
-    // Set the module search path explicitly instead of relying on auto-detection.
+    // Set the module search path explicitly: stdlib, binary modules, app code.
     config.module_search_paths_set = 1;
-    for (NSString *p in @[stdlib, dynload]) {
+    NSString *pkgs = [res stringByAppendingPathComponent:@"app_packages"];
+    NSArray<NSString *> *paths = @[stdlib, dynload, app, pkgs];
+    for (NSString *p in paths) {
         wchar_t *w = Py_DecodeLocale(p.UTF8String, NULL);
-        if (!w) {
-            PyConfig_Clear(&config);
-            return @"config: could not decode a module path";
-        }
         status = PyWideStringList_Append(&config.module_search_paths, w);
         PyMem_RawFree(w);
         if (PyStatus_Exception(status)) {
             PyConfig_Clear(&config);
-            return [NSString stringWithFormat:@"config paths: %s", status.err_msg ?: "unknown"];
+            return [NSString stringWithFormat:@"path: %s", status.err_msg ?: "unknown"];
         }
     }
 
     status = Py_InitializeFromConfig(&config);
     PyConfig_Clear(&config);
     if (PyStatus_Exception(status)) {
-        return [NSString stringWithFormat:@"init: %s", status.err_msg ?: "unknown"];
+        return [NSString stringWithFormat:@"init: %s %@", status.err_msg ?: "unknown", diag];
     }
 
-    NSString *cmd = [NSString stringWithFormat:@"import sys\nsys.path.insert(0, \"%@\")\n", app];
-    if (PyRun_SimpleString(cmd.UTF8String) != 0) {
-        return @"could not set module path";
-    }
     PyObject *m = PyImport_ImportModule("runner");
     if (!m) {
         return [@"runner import failed: " stringByAppendingString:exceptionText()];
