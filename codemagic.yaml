@@ -1,0 +1,138 @@
+workflows:
+  ios-build:
+    name: Python Window iOS (Codemagic)
+    max_build_duration: 120
+    instance_type: mac_mini_m2
+
+    environment:
+      xcode: latest
+
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+          source: true
+      cancel_previous_builds: true
+
+    scripts:
+      - name: Install build tools
+        script: |
+          set -euo pipefail
+          brew install xcodegen python@3.13
+
+      - name: Download Python for iOS and install NumPy
+        script: |
+          set -euo pipefail
+
+          PYTHON_BIN="$(brew --prefix python@3.13)/bin/python3.13"
+          "$PYTHON_BIN" --version
+
+          ASSET_URL="$("$PYTHON_BIN" - <<'PY'
+          import json
+          import urllib.request
+
+          url = "https://api.github.com/repos/beeware/Python-Apple-support/releases?per_page=100"
+          req = urllib.request.Request(url, headers={"User-Agent": "Codemagic-PyPhone-Build"})
+          with urllib.request.urlopen(req, timeout=30) as response:
+              releases = json.load(response)
+
+          for release in releases:
+              if not release.get("tag_name", "").startswith("3.13-"):
+                  continue
+              for asset in release.get("assets", []):
+                  name = asset.get("name", "")
+                  if name.startswith("Python-3.13-iOS-support") and name.endswith(".tar.gz"):
+                      print(asset["browser_download_url"])
+                      raise SystemExit(0)
+
+          raise SystemExit("Could not find a Python 3.13 iOS support archive in recent BeeWare releases.")
+          PY
+          )"
+
+          echo "Downloading Python support archive: $ASSET_URL"
+          curl -fL "$ASSET_URL" -o Python-3.13-iOS-support.tar.gz
+          mkdir -p py
+          tar -xzf Python-3.13-iOS-support.tar.gz -C py
+
+          STDLIB="$(find py -type d -path '*/python/lib/python3.13' -print -quit)"
+          if [ -z "$STDLIB" ]; then
+            echo "Could not find Python 3.13 standard library in the support archive."
+            find py -maxdepth 7 -type d | head -100
+            exit 1
+          fi
+          mkdir -p python-stdlib/python3.13
+          rsync -a "$STDLIB/" python-stdlib/python3.13/
+
+          XCF="$(find py -maxdepth 7 -name Python.xcframework -type d -print -quit)"
+          if [ -z "$XCF" ]; then
+            echo "Python.xcframework not found in support archive."
+            exit 1
+          fi
+          mv "$XCF" ./Python.xcframework
+
+          test -f Python.xcframework/Info.plist
+          test -f python-stdlib/python3.13/encodings/__init__.py
+
+          mkdir -p app_packages
+          "$PYTHON_BIN" -m pip install --upgrade pip
+          "$PYTHON_BIN" -m pip install -r requirements.txt \
+            --target app_packages \
+            --platform ios_13_0_arm64_iphoneos \
+            --implementation cp --python-version 3.13 --abi cp313 \
+            --only-binary=:all: \
+            --extra-index-url https://pypi.anaconda.org/beeware/simple
+          rm -rf app_packages/bin
+          test -f app_packages/numpy/__init__.py
+          echo "NumPy installed:"
+          ls app_packages | head -30
+
+      - name: Generate Xcode project
+        script: |
+          set -euo pipefail
+          xcodegen generate
+
+      - name: Build unsigned iOS app
+        script: |
+          set -euo pipefail
+          xcodebuild \
+            -project CodeWindow.xcodeproj \
+            -scheme CodeWindow \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tee /tmp/xcodebuild.log
+
+      - name: Verify Python and NumPy are bundled
+        script: |
+          set -euo pipefail
+          APP="build/Build/Products/Release-iphoneos/CodeWindow.app"
+          test -f "$APP/python/lib/python3.13/encodings/__init__.py" || {
+            echo "Python standard library missing from app."
+            exit 1
+          }
+          test -f "$APP/app_packages/numpy/__init__.py" || {
+            echo "NumPy package missing from app."
+            exit 1
+          }
+          find "$APP/Frameworks" -maxdepth 1 -name 'numpy*framework' -print
+          find "$APP/Frameworks" -maxdepth 1 -name 'numpy*framework' | grep -q . || {
+            echo "NumPy native extension frameworks missing."
+            exit 1
+          }
+
+      - name: Package unsigned IPA
+        script: |
+          set -euo pipefail
+          rm -rf Payload PythonWindow.ipa
+          mkdir Payload
+          cp -R build/Build/Products/Release-iphoneos/CodeWindow.app Payload/
+          zip -qr PythonWindow.ipa Payload
+          ls -lh PythonWindow.ipa
+
+    artifacts:
+      - PythonWindow.ipa
+      - build/Build/Products/Release-iphoneos/CodeWindow.app
+      - /tmp/xcodebuild.log
