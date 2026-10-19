@@ -11,6 +11,8 @@ targets:
       - Sources
       - path: App
         type: folder
+      - path: app_packages
+        type: folder
     dependencies:
       - framework: Python.xcframework
         embed: true
