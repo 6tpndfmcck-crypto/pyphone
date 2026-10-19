@@ -1,6 +1,6 @@
 workflows:
   ios-build:
-    name: Pyphone (Codemagic)
+    name: PyPhone iOS
     max_build_duration: 120
     instance_type: mac_mini_m2
 
@@ -97,8 +97,8 @@ workflows:
         script: |
           set -euo pipefail
           xcodebuild \
-            -project CodeWindow.xcodeproj \
-            -scheme CodeWindow \
+            -project PyPhone.xcodeproj \
+            -scheme PyPhone \
             -configuration Release \
             -sdk iphoneos \
             -derivedDataPath build \
@@ -108,7 +108,7 @@ workflows:
       - name: make sure python & numpy are there
         script: |
           set -euo pipefail
-          APP="build/Build/Products/Release-iphoneos/CodeWindow.app"
+          APP="build/Build/Products/Release-iphoneos/PyPhone.app"
           test -f "$APP/python/lib/python3.13/encodings/__init__.py" || {
             echo "Python standard library missing from app."
             exit 1
@@ -126,13 +126,13 @@ workflows:
       - name: Package IPA
         script: |
           set -euo pipefail
-          rm -rf Payload PythonWindow.ipa
+          rm -rf Payload PyPhone.ipa
           mkdir Payload
-          cp -R build/Build/Products/Release-iphoneos/CodeWindow.app Payload/
-          zip -qr PythonWindow.ipa Payload
-          ls -lh PythonWindow.ipa
+          cp -R build/Build/Products/Release-iphoneos/PyPhone.app Payload/
+          zip -qr PyPhone.ipa Payload
+          ls -lh PyPhone.ipa
 
     artifacts:
-      - PythonWindow.ipa
-      - build/Build/Products/Release-iphoneos/CodeWindow.app
+      - PyPhone.ipa
+      - build/Build/Products/Release-iphoneos/PyPhone.app
       - /tmp/xcodebuild.log
