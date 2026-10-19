@@ -1,5 +1,9 @@
 import sys, json, traceback, threading, builtins
 
+# Load datetime on the interpreter's main thread before user code or native
+# packages (such as NumPy) request its C API from a worker thread.
+import datetime
+
 
 class _Out:
     def __init__(self):
