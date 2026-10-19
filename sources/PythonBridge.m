@@ -43,7 +43,8 @@ static NSString *exceptionText(void) {
         return [NSString stringWithFormat:@"python folder not found in %@", bases];
     }
     NSString *home = [res stringByAppendingPathComponent:@"python"];
-    NSString *app = [res stringByAppendingPathComponent:@"App"];
+    NSString *app = [res stringByAppendingPathComponent:@"app"];
+    // Xcode copies the app/ folder reference with its original lowercase name.
 
     // Find the standard library folder, e.g. python/lib/python3.13
     NSString *libDir = [home stringByAppendingPathComponent:@"lib"];
