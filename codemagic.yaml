@@ -93,16 +93,13 @@ workflows:
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
             build 2>&1 | tee /tmp/xcodebuild.log
 
-      - name: Package IPA
+      - name: Package unsigned IPA
         script: |
-          set -euo pipefail
-          rm -rf Payload PyPhone.ipa PyPhone_ipa.zip
+          APP_PATH=$(find build -type d -name "*.app" -path "*Release-iphoneos*" | head -n 1)
+          echo "Found app at: $APP_PATH"
+          rm -rf Payload PyPhone.ipa
           mkdir Payload
-          cp -R build/Build/Products/Release-iphoneos/PyPhone.app Payload/
-          zip -qr PyPhone.ipa Payload
-          # Also provide a ZIP copy for easier downloading if needed.
-          cp PyPhone.ipa PyPhone_ipa.zip
-          ls -lh PyPhone.ipa PyPhone_ipa.zip
-
+          cp -R "$APP_PATH" Payload/
+          zip -qry PyPhone.ipa Payload
     artifacts:
-      - PyPhone_ipa.zip
+      - PyPhone_IPA.zip
