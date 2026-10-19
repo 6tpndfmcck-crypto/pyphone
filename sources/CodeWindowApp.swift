@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct CodeWindowApp: App {
+struct PyPhoneApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
