@@ -114,12 +114,16 @@ workflows:
       - name: Package IPA
         script: |
           set -euo pipefail
-          rm -rf Payload PyPhone.app PyPhone.ipa PyPhone_ipa.zip
-          cp -R build/Build/Products/Release-iphoneos/PyPhone.app ./PyPhone.app
-          zip -qr PyPhone_ipa.zip PyPhone.app
-          ls -lh PyPhone_ipa.zip
+          rm -rf Payload PyPhone.ipa PyPhone_ipa.zip
+          mkdir Payload
+          cp -R build/Build/Products/Release-iphoneos/PyPhone.app Payload/
+          zip -qr PyPhone.ipa Payload
+          # Also provide a ZIP copy for easier downloading if needed.
+          cp PyPhone.ipa PyPhone_ipa.zip
+          ls -lh PyPhone.ipa PyPhone_ipa.zip
 
     artifacts:
+      - PyPhone.ipa
       - PyPhone_ipa.zip
       - build/Build/Products/Release-iphoneos/PyPhone.app
       - /tmp/xcodebuild.log
