@@ -1,5 +1,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
+import UIKit
 
 enum Starter {
     static let code = #"""
@@ -53,6 +54,8 @@ struct ContentView: View {
     @State private var errorMessage: String?
     @State private var alertTitle = "Couldn't open file"
     @State private var inputText = ""
+    @State private var terminalHeight: CGFloat = 180
+    @State private var terminalDragStartHeight: CGFloat = 180
 
     var body: some View {
         VStack(spacing: 0) {
@@ -123,14 +126,43 @@ struct ContentView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding()
                 }
-                Divider()
-                ScrollView {
-                    Text(runner.output)
-                        .font(.system(size: 12, design: .monospaced))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(10)
+                VStack(spacing: 0) {
+                    HStack {
+                        Capsule()
+                            .fill(Color.secondary.opacity(0.55))
+                            .frame(width: 36, height: 5)
+                            .frame(maxWidth: .infinity)
+                            .contentShape(Rectangle())
+                            .gesture(
+                                DragGesture()
+                                    .onChanged { value in
+                                        terminalHeight = min(max(terminalDragStartHeight - value.translation.height, 80), 500)
+                                    }
+                                    .onEnded { _ in
+                                        terminalDragStartHeight = terminalHeight
+                                    }
+                            )
+                        Button {
+                            UIPasteboard.general.string = runner.output
+                        } label: {
+                            Label("Copy", systemImage: "doc.on.doc")
+                                .font(.caption)
+                        }
+                        .disabled(runner.output.isEmpty)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Color(.secondarySystemBackground))
+                    ScrollView {
+                        Text(runner.output.isEmpty ? "Terminal output appears here." : runner.output)
+                            .font(.system(size: 12, design: .monospaced))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(10)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color(.secondarySystemBackground))
                 }
-                .frame(maxHeight: 180)
+                .frame(height: terminalHeight)
                 .background(Color(.secondarySystemBackground))
             }
         }
