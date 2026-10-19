@@ -146,9 +146,17 @@ workflows:
           unzip -Z1 /tmp/PyPhone_check.ipa | grep -Fxq "Payload/PyPhone.app/Info.plist"
 
           echo "All checks passed. Ready for artifact publishing."
-          ls -lh PyPhone.ipa PyPhone_ipa.zip
+          echo "Final artifact sizes (bytes):"
+          wc -c PyPhone.ipa PyPhone_ipa.zip
+          echo "Final artifact SHA-256:"
+          shasum -a 256 PyPhone.ipa PyPhone_ipa.zip
+          # Publish checksums too, so a downloaded file can be compared with
+          # the exact bytes that passed ZIP integrity checks on the build VM.
+          shasum -a 256 PyPhone.ipa PyPhone_ipa.zip > PyPhone_SHA256.txt
+          ls -lh PyPhone.ipa PyPhone_ipa.zip PyPhone_SHA256.txt
 
     artifacts:
       - PyPhone_ipa.zip
       - PyPhone.ipa
+      - PyPhone_SHA256.txt
       - /tmp/xcodebuild.log
