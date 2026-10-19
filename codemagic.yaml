@@ -1,6 +1,6 @@
 workflows:
   ios-build:
-    name: Python Window iOS (Codemagic)
+    name: Pyphone (Codemagic)
     max_build_duration: 120
     instance_type: mac_mini_m2
 
@@ -17,12 +17,12 @@ workflows:
       cancel_previous_builds: true
 
     scripts:
-      - name: Install build tools
+      - name: get build tools
         script: |
           set -euo pipefail
           brew install xcodegen python@3.13
 
-      - name: Download Python for iOS and install NumPy
+      - name: get python and numpy
         script: |
           set -euo pipefail
 
@@ -88,12 +88,12 @@ workflows:
           echo "NumPy installed:"
           ls app_packages | head -30
 
-      - name: Generate Xcode project
+      - name: make Xcode 
         script: |
           set -euo pipefail
           xcodegen generate
 
-      - name: Build unsigned iOS app
+      - name: make IPA
         script: |
           set -euo pipefail
           xcodebuild \
@@ -105,7 +105,7 @@ workflows:
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
             build 2>&1 | tee /tmp/xcodebuild.log
 
-      - name: Verify Python and NumPy are bundled
+      - name: make sure python & numpy are there
         script: |
           set -euo pipefail
           APP="build/Build/Products/Release-iphoneos/CodeWindow.app"
@@ -123,7 +123,7 @@ workflows:
             exit 1
           }
 
-      - name: Package unsigned IPA
+      - name: Package IPA
         script: |
           set -euo pipefail
           rm -rf Payload PythonWindow.ipa
@@ -133,6 +133,6 @@ workflows:
           ls -lh PythonWindow.ipa
 
     artifacts:
-      - PythonWindow.ipa
+      - PyPhone.ipa
       - build/Build/Products/Release-iphoneos/CodeWindow.app
       - /tmp/xcodebuild.log
