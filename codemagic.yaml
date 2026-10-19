@@ -113,3 +113,7 @@ workflows:
           cp -R "$APP_PATH" Payload/
           zip -qry PyPhone.ipa Payload
           ls -lh PyPhone.ipa
+
+    artifacts:
+      - PyPhone.ipa
+      - /tmp/xcodebuild.log
