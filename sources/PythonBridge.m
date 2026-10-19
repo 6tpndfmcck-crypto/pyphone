@@ -24,6 +24,22 @@ static NSString *exceptionText(void) {
     NSString *home = [res stringByAppendingPathComponent:@"python"];
     NSString *app = [res stringByAppendingPathComponent:@"App"];
 
+    // Find the stdlib folder (python/lib/python3.x) and report clearly if it is missing.
+    NSFileManager *fm = NSFileManager.defaultManager;
+    NSString *libDir = [home stringByAppendingPathComponent:@"lib"];
+    NSArray *items = [fm contentsOfDirectoryAtPath:libDir error:nil];
+    NSString *ver = nil;
+    for (NSString *i in items) if ([i hasPrefix:@"python3."]) ver = i;
+    if (!ver) {
+        return [NSString stringWithFormat:@"stdlib missing: no python3.x in %@ (found: %@)",
+                libDir, items ? [items componentsJoinedByString:@", "] : @"folder does not exist"];
+    }
+    NSString *stdlib = [libDir stringByAppendingPathComponent:ver];
+    if (![fm fileExistsAtPath:[stdlib stringByAppendingPathComponent:@"encodings"]]) {
+        return [NSString stringWithFormat:@"stdlib incomplete: no encodings in %@", stdlib];
+    }
+    NSString *dynload = [stdlib stringByAppendingPathComponent:@"lib-dynload"];
+
     PyStatus status;
     PyPreConfig pre;
     PyPreConfig_InitIsolatedConfig(&pre);
@@ -43,6 +59,23 @@ static NSString *exceptionText(void) {
         PyConfig_Clear(&config);
         return [NSString stringWithFormat:@"config: %s", status.err_msg ?: "unknown"];
     }
+
+    // Set the module search path explicitly instead of relying on auto-detection.
+    config.module_search_paths_set = 1;
+    for (NSString *p in @[stdlib, dynload]) {
+        wchar_t *w = Py_DecodeLocale(p.UTF8String, NULL);
+        if (!w) {
+            PyConfig_Clear(&config);
+            return @"config: could not decode a module path";
+        }
+        status = PyWideStringList_Append(&config.module_search_paths, w);
+        PyMem_RawFree(w);
+        if (PyStatus_Exception(status)) {
+            PyConfig_Clear(&config);
+            return [NSString stringWithFormat:@"config paths: %s", status.err_msg ?: "unknown"];
+        }
+    }
+
     status = Py_InitializeFromConfig(&config);
     PyConfig_Clear(&config);
     if (PyStatus_Exception(status)) {
