@@ -25,6 +25,23 @@ jobs:
           ls -la Python.xcframework
           test -f Python.xcframework/Info.plist || { echo "Python.xcframework/Info.plist missing"; exit 1; }
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Fetch Python packages (numpy etc.)
+        run: |
+          mkdir -p app_packages
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt \
+            --target app_packages \
+            --platform ios_13_0_arm64_iphoneos \
+            --implementation cp --python-version 3.13 --abi cp313 \
+            --only-binary=:all: \
+            --extra-index-url https://pypi.anaconda.org/beeware/simple
+          rm -rf app_packages/bin
+          ls app_packages
+
       - name: Install XcodeGen
         run: brew install xcodegen
 
@@ -48,6 +65,7 @@ jobs:
           echo "--- stdlib sample ---"; ls "$APP"/python/lib/python3*/ | head -15
           test -f "$APP"/python/lib/python3*/encodings/__init__.py || { echo "encodings missing from app"; exit 1; }
           echo "--- Frameworks ---"; ls "$APP/Frameworks" | head -10
+          echo "--- app_packages ---"; ls "$APP/app_packages" | head -20
 
       - name: Package IPA
         run: |
