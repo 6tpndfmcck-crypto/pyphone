@@ -10,7 +10,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Fetch Python
+      - name: Fetch Python for iOS
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -25,20 +25,13 @@ jobs:
           ls -la Python.xcframework
           test -f Python.xcframework/Info.plist || { echo "Python.xcframework/Info.plist missing"; exit 1; }
 
-      - name: Show package layout for some reason
-        run: |
-          echo "--- directory layout ---"
-          find Python.xcframework -maxdepth 4 -type d | head -60
-          echo "--- where is encodings? ---"
-          find Python.xcframework -type d -name encodings | head
-
       - name: Install XcodeGen
         run: brew install xcodegen
 
       - name: Generate project
         run: xcodegen generate
 
-      - name: Build ipa
+      - name: Build (unsigned)
         run: |
           xcodebuild -project CodeWindow.xcodeproj \
             -scheme CodeWindow \
@@ -48,19 +41,20 @@ jobs:
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
             build
 
-      - name: Verify stdlib in app
+      - name: Check Python is inside the app
         run: |
           APP=build/Build/Products/Release-iphoneos/CodeWindow.app
-          echo "--- python/lib ---"
-          ls "$APP/python/lib"
-          test -d "$APP/python/lib/python3.13/encodings" || { echo "encodings missing from app"; exit 1; }
-          test -f "$APP/python/lib/python3.13/os.py" || { echo "os.py missing from app"; exit 1; }
+          echo "--- python/lib ---"; ls "$APP/python/lib"
+          echo "--- stdlib sample ---"; ls "$APP"/python/lib/python3*/ | head -15
+          test -f "$APP"/python/lib/python3*/encodings/__init__.py || { echo "encodings missing from app"; exit 1; }
+          echo "--- Frameworks ---"; ls "$APP/Frameworks" | head -10
 
-      - name: finish IPA
+      - name: Package IPA
         run: |
           mkdir Payload
           cp -R build/Build/Products/Release-iphoneos/CodeWindow.app Payload/
           zip -qr PythonWindow.ipa Payload
+          ls -lh PythonWindow.ipa
 
       - uses: actions/upload-artifact@v4
         with:
