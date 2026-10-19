@@ -51,13 +51,20 @@ struct ContentView: View {
     @State private var replaceText = ""
     @State private var replaceName = "script"
     @State private var errorMessage: String?
+    @State private var alertTitle = "Couldn't open file"
     @State private var inputText = ""
 
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("\(filename).py · \(runner.status)")
-                    .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                Button {
+                    alertTitle = "Python startup details"
+                    errorMessage = runner.status
+                } label: {
+                    Text("\(filename).py · \(runner.status)")
+                        .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                }
+                .buttonStyle(.plain)
                 Spacer()
                 Menu {
                     Button { ask(text: "", name: "untitled") } label: { Label("New blank file", systemImage: "doc") }
@@ -84,7 +91,7 @@ struct ContentView: View {
             .fileImporter(isPresented: $showImporter, allowedContentTypes: [.pythonScript, .plainText, .text]) { result in
                 handleImport(result)
             }
-            .alert("Couldn't open file", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
+            .alert(alertTitle, isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(errorMessage ?? "")
@@ -165,6 +172,7 @@ struct ContentView: View {
     private func handleImport(_ result: Result<URL, Error>) {
         switch result {
         case .failure(let err):
+            alertTitle = "Couldn't open file"
             errorMessage = err.localizedDescription
         case .success(let url):
             let scoped = url.startAccessingSecurityScopedResource()
