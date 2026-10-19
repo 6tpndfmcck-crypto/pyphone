@@ -112,8 +112,12 @@ workflows:
           mkdir Payload
           cp -R "$APP_PATH" Payload/
           zip -qry PyPhone.ipa Payload
-          ls -lh PyPhone.ipa
+          # Put the IPA inside a ZIP so Codemagic/iPhone can download it reliably.
+          rm -f PyPhone_ipa.zip
+          zip -qry PyPhone_ipa.zip PyPhone.ipa
+          ls -lh PyPhone.ipa PyPhone_ipa.zip
 
     artifacts:
+      - PyPhone_ipa.zip
       - PyPhone.ipa
       - /tmp/xcodebuild.log
