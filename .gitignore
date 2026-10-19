@@ -1,0 +1,8 @@
+.DS_Store
+build/
+py/
+Python.xcframework/
+CodeWindow.xcodeproj/
+*.ipa
+Payload/
+*.tar.gz
