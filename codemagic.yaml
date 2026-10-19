@@ -29,27 +29,8 @@ workflows:
           PYTHON_BIN="$(brew --prefix python@3.13)/bin/python3.13"
           "$PYTHON_BIN" --version
 
-          ASSET_URL="$("$PYTHON_BIN" - <<'PY'
-          import json
-          import urllib.request
-
-          url = "https://api.github.com/repos/beeware/Python-Apple-support/releases?per_page=100"
-          req = urllib.request.Request(url, headers={"User-Agent": "Codemagic-PyPhone-Build"})
-          with urllib.request.urlopen(req, timeout=30) as response:
-              releases = json.load(response)
-
-          for release in releases:
-              if not release.get("tag_name", "").startswith("3.13-"):
-                  continue
-              for asset in release.get("assets", []):
-                  name = asset.get("name", "")
-                  if name.startswith("Python-3.13-iOS-support") and name.endswith(".tar.gz"):
-                      print(asset["browser_download_url"])
-                      raise SystemExit(0)
-
-          raise SystemExit("Could not find a Python 3.13 iOS support archive in recent BeeWare releases.")
-          PY
-          )"
+          # Use the known release URL directly to avoid GitHub API rate limits.
+          ASSET_URL="https://github.com/beeware/Python-Apple-support/releases/download/3.13-b16/Python-3.13-iOS-support.b16.tar.gz"
 
           echo "Downloading Python support archive: $ASSET_URL"
           curl -fL "$ASSET_URL" -o Python-3.13-iOS-support.tar.gz
@@ -133,10 +114,10 @@ workflows:
       - name: Package IPA
         script: |
           set -euo pipefail
-          rm -rf Payload PyPhone.ipa
+          rm -rf Payload PyPhone.ipa PyPhone_ipa.zip
           mkdir Payload
           cp -R build/Build/Products/Release-iphoneos/PyPhone.app Payload/
-          zip -qr PyPhone.ipa Payload
+          zip -qr PyPhone_ipa.zip Payload
           ls -lh PyPhone_ipa.zip
 
     artifacts:
