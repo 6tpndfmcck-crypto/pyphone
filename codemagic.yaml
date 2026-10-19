@@ -84,6 +84,7 @@ workflows:
       - name: make IPA
         script: |
           set -euo pipefail
+          rm -rf build
           xcodebuild \
             -project PyPhone.xcodeproj \
             -scheme PyPhone \
@@ -92,20 +93,23 @@ workflows:
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
             build 2>&1 | tee /tmp/xcodebuild.log
+          test -d "build/Build/Products/Release-iphoneos/PyPhone.app" || {
+            echo "xcodebuild finished without creating PyPhone.app. Last build log lines:"
+            tail -100 /tmp/xcodebuild.log
+            exit 1
+          }
 
-            - name: Package unsigned IPA
+      - name: Package unsigned IPA
         script: |
           set -euo pipefail
-          APP_PATH=$(find build -type d -name "*.app" -path "*Release-iphoneos*" | head -n 1)
-          if [ -z "$APP_PATH" ]; then
-            echo "No .app found in build output"
+          APP_PATH="build/Build/Products/Release-iphoneos/PyPhone.app"
+          test -d "$APP_PATH" || {
+            echo "PyPhone.app is missing; refusing to create a broken IPA."
+            tail -100 /tmp/xcodebuild.log || true
             exit 1
-          fi
-          echo "Found app at: $APP_PATH"
+          }
           rm -rf Payload PyPhone.ipa
           mkdir Payload
           cp -R "$APP_PATH" Payload/
           zip -qry PyPhone.ipa Payload
           ls -lh PyPhone.ipa
-    artifacts:
-      - PyPhone.ipa
