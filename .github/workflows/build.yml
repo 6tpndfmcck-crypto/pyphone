@@ -10,7 +10,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Fetch Python for iOS
+      - name: Fetch Python
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -25,13 +25,12 @@ jobs:
           ls -la Python.xcframework
           test -f Python.xcframework/Info.plist || { echo "Python.xcframework/Info.plist missing"; exit 1; }
 
-      - name: Check package layout
+      - name: Show package layout for some reason
         run: |
-          echo "--- build helper ---"
-          ls Python.xcframework/build
-          test -f Python.xcframework/build/build_utils.sh || { echo "build_utils.sh missing"; exit 1; }
           echo "--- directory layout ---"
-          find Python.xcframework -maxdepth 3 -type d | head -30
+          find Python.xcframework -maxdepth 4 -type d | head -60
+          echo "--- where is encodings? ---"
+          find Python.xcframework -type d -name encodings | head
 
       - name: Install XcodeGen
         run: brew install xcodegen
@@ -39,7 +38,7 @@ jobs:
       - name: Generate project
         run: xcodegen generate
 
-      - name: Build (unsigned)
+      - name: Build ipa
         run: |
           xcodebuild -project CodeWindow.xcodeproj \
             -scheme CodeWindow \
@@ -57,7 +56,7 @@ jobs:
           test -d "$APP/python/lib/python3.13/encodings" || { echo "encodings missing from app"; exit 1; }
           test -f "$APP/python/lib/python3.13/os.py" || { echo "os.py missing from app"; exit 1; }
 
-      - name: Package IPA
+      - name: finish IPA
         run: |
           mkdir Payload
           cp -R build/Build/Products/Release-iphoneos/CodeWindow.app Payload/
