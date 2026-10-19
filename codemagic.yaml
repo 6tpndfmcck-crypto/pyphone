@@ -56,12 +56,15 @@ workflows:
           mkdir -p py
           tar -xzf Python-3.13-iOS-support.tar.gz -C py
 
-          STDLIB="$(find py -type d -path '*/lib/python3.13' -print -quit)"
-          if [ -z "$STDLIB" ]; then
-            echo "Could not find Python 3.13 standard library in the support archive."
-            find py -maxdepth 7 -type d | head -100
+          # Locate the standard library by a file it must contain instead of
+          # assuming the archive's internal folder layout.
+          ENCODINGS="$(find py -type f -path '*/encodings/__init__.py' -print -quit)"
+          if [ -z "$ENCODINGS" ]; then
+            echo "Could not find encodings/__init__.py in the Python support archive."
+            find py -type f -name '__init__.py' | head -100
             exit 1
           fi
+          STDLIB="${ENCODINGS%/encodings/__init__.py}"
           mkdir -p python-stdlib/python3.13
           rsync -a "$STDLIB/" python-stdlib/python3.13/
 
