@@ -2,7 +2,13 @@
 build/
 py/
 Python.xcframework/
+PyPhone.xcodeproj/
 CodeWindow.xcodeproj/
-*.ipa
+.build-venv/
+python-stdlib/
+app_packages/
+PyPhone.ipa
+PyPhone_ipa.zip
+PyPhone_SHA256.txt
 Payload/
 *.tar.gz
