@@ -53,6 +53,20 @@ def _input(prompt=""):
 builtins.input = _input
 
 
+def check_runtime(_=""):
+    """Import the core modules users need before enabling the Run button."""
+    import math
+    import numpy
+
+    # Use each import in a small real operation, not merely an import statement.
+    if math.sqrt(81) != 9.0:
+        raise RuntimeError("math module failed its smoke test")
+    probe = numpy.array([1, 2, 3])
+    if int(probe.sum()) != 6:
+        raise RuntimeError("NumPy failed its smoke test")
+    return "Python ready · NumPy " + str(numpy.__version__)
+
+
 def _worker(code, started):
     with _run_lock:
         _run_tid[0] = threading.get_ident()
