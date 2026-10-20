@@ -70,7 +70,7 @@ final class Runner: ObservableObject {
     func run(_ code: String) {
         // Keep the Run button from queueing duplicate programs before the first
         // state poll returns from Python.
-        guard ready, !running, pending == 0 else { return }
+        guard ready, !running else { return }
         output = ""
         running = true
         stopRequested = false
@@ -85,7 +85,7 @@ final class Runner: ObservableObject {
     }
 
     func stop() {
-        guard running || pending > 0 else { return }
+        guard running else { return }
         guard tid != 0 else {
             // The Python worker may not have published its thread ID yet.
             // Defer the interrupt until the next state response supplies it.
