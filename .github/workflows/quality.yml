@@ -20,7 +20,8 @@ jobs:
         with:
           python-version: "3.13"
       - name: Install host NumPy for runtime tests
-        run: python -m pip install --only-binary=:all: numpy==2.5.2.post1
+        run: |
+          python -m pip install --only-binary=:all: "numpy==2.5.2.post1"
       - name: Compile Python sources
         env:
           PYTHONDONTWRITEBYTECODE: "1"
