@@ -97,7 +97,7 @@ workflows:
           rm -rf "$PYTHONPYCACHEPREFIX"
           # The app_packages folder contains iOS-only wheels, so install a
           # separate host NumPy into the isolated build venv for test execution.
-          "$BUILD_PYTHON" -m pip install --only-binary=:all: "numpy==2.5.2.post1"
+          "$BUILD_PYTHON" -m pip install --only-binary=:all: "numpy==2.3.5"
           "$BUILD_PYTHON" -m py_compile app/runner.py app/ui.py scripts/test_runtime.py
           "$BUILD_PYTHON" scripts/test_runtime.py
           test -f app_packages/numpy/__init__.py
