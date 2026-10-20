@@ -30,6 +30,9 @@ final class Runner: ObservableObject {
     // All native-to-Python calls share one serial queue. A state read and its
     // matching output read must not interleave with another poll or UI event.
     private let pythonQueue = DispatchQueue(label: "py.bridge")
+    // Control calls must remain independent so Stop/input can interrupt or
+    // resume a Python callback that is currently occupying pythonQueue.
+    private let controlQueue = DispatchQueue(label: "py.control")
 
     init() {
         if let err = PythonBridge.start() {
@@ -59,12 +62,12 @@ final class Runner: ObservableObject {
     func stop() {
         guard tid != 0 else { return }
         let t = UInt(tid)
-        pythonQueue.async { PythonBridge.stopThread(t) }
+        controlQueue.async { PythonBridge.stopThread(t) }
     }
 
     func submitInput(_ text: String) {
         prompt = nil
-        pythonQueue.async { _ = PythonBridge.call("input_reply", arg: text) }
+        controlQueue.async { _ = PythonBridge.call("input_reply", arg: text) }
     }
 
     func tap(_ id: Int) { send(id, "tap", "") }
