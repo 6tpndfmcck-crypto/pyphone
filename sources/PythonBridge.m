@@ -131,15 +131,19 @@ static NSString *exceptionText(void) {
     for (NSString *moduleName in requiredModules) {
         PyObject *module = PyImport_ImportModule(moduleName.UTF8String);
         if (!module) {
-            return [NSString stringWithFormat:@"required Python module %@ failed: %@",
-                    moduleName, exceptionText()];
+            NSString *message = [NSString stringWithFormat:@"required Python module %@ failed: %@",
+                                 moduleName, exceptionText()];
+            PyEval_SaveThread();
+            return message;
         }
         Py_DECREF(module);
     }
 
     PyObject *m = PyImport_ImportModule("runner");
     if (!m) {
-        return [@"runner import failed: " stringByAppendingString:exceptionText()];
+        NSString *message = [@"runner import failed: " stringByAppendingString:exceptionText()];
+        PyEval_SaveThread();
+        return message;
     }
     Py_DECREF(m);
 
