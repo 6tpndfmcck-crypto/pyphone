@@ -50,7 +50,10 @@ final class Runner: ObservableObject {
             DispatchQueue.main.async {
                 guard let self = self else { return }
                 if result.hasPrefix("error:") {
-                    self.status = "Python failed: \(result)"
+                    let detail = result.hasPrefix("error: ")
+                        ? String(result.dropFirst("error: ".count))
+                        : result
+                    self.status = "Python failed: \(detail)"
                     return
                 }
 
