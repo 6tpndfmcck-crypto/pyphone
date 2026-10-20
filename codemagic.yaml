@@ -37,26 +37,38 @@ workflows:
           mkdir -p py
           tar -xzf Python-3.13-iOS-support.tar.gz -C py
 
-          # Locate the standard library by a file it must contain instead of
-          # assuming the archive's internal folder layout.
-          ENCODINGS="$(find py -type f -path '*/encodings/__init__.py' -print -quit)"
-          if [ -z "$ENCODINGS" ]; then
-            echo "Could not find encodings/__init__.py in the Python support archive."
-            find py -type f -name '__init__.py' | head -100
-            exit 1
-          fi
-          STDLIB="${ENCODINGS%/encodings/__init__.py}"
-          mkdir -p python-stdlib/python3.13
-          rsync -a "$STDLIB/" python-stdlib/python3.13/
-
           XCF="$(find py -maxdepth 7 -name Python.xcframework -type d -print -quit)"
           if [ -z "$XCF" ]; then
             echo "Python.xcframework not found in support archive."
             exit 1
           fi
           mv "$XCF" ./Python.xcframework
-
           test -f Python.xcframework/Info.plist
+
+          # Prefer the support archive's standalone pure-Python library. If
+          # the release only includes it inside the XCFramework, use the
+          # iPhone device slice specifically. Never stage another architecture's
+          # native extensions as the app's standard library.
+          ENCODINGS="$(find py -type f -path '*/encodings/__init__.py' ! -path '*/Python.xcframework/*' -print -quit)"
+          if [ -z "$ENCODINGS" ]; then
+            for CANDIDATE in \
+              "Python.xcframework/ios-arm64/lib-arm64/python3.13/encodings/__init__.py" \
+              "Python.xcframework/ios-arm64/lib/python3.13/encodings/__init__.py"; do
+              if [ -f "$CANDIDATE" ]; then
+                ENCODINGS="$CANDIDATE"
+                break
+              fi
+            done
+          fi
+          if [ -z "$ENCODINGS" ]; then
+            echo "Could not find device-compatible encodings/__init__.py in the support archive."
+            find py Python.xcframework -type f -path '*/encodings/__init__.py' -print | head -30
+            exit 1
+          fi
+          STDLIB="${ENCODINGS%/encodings/__init__.py}"
+          rm -rf python-stdlib/python3.13
+          mkdir -p python-stdlib/python3.13
+          rsync -a --exclude='lib-dynload/' "$STDLIB/" python-stdlib/python3.13/
           test -f python-stdlib/python3.13/encodings/__init__.py
 
           # Use an isolated virtual environment so Homebrew's PEP 668
