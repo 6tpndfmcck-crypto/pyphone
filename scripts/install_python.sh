@@ -28,14 +28,24 @@ rsync -au --delete "$XC/$SLICE/lib/" "$APP/python/lib/"
 # The support archive's standard library is separate from the XCFramework's
 # lib/ directory, so copy it into the expected python/lib/python3.13 location.
 mkdir -p "$APP/python/lib/python3.13"
-# Copy the complete standard library, including native extension modules.
-# The loop below converts each .so in lib-dynload into an iOS framework.
-rsync -au --delete "$STDLIB/" "$APP/python/lib/python3.13/"
-test -d "$APP/python/lib/python3.13/lib-dynload" || {
-  echo "error: Python support archive has no lib-dynload directory under $STDLIB" >&2
-  find "$STDLIB" -maxdepth 3 -type d -name 'lib-dynload' -print >&2
+# Merge the pure-Python standard library into the XCFramework's Python
+# library tree. Do NOT use --delete here: the XCFramework may be the source
+# of lib-dynload native modules, and deleting files absent from STDLIB would
+# remove modules such as math before they can be bundled as iOS frameworks.
+rsync -au "$STDLIB/" "$APP/python/lib/python3.13/"
+
+DYNLOAD="$APP/python/lib/python3.13/lib-dynload"
+if [ ! -d "$DYNLOAD" ]; then
+  echo "error: Python native extension directory is missing: $DYNLOAD" >&2
+  echo "Looking for lib-dynload in the support archive and XCFramework:" >&2
+  find "$PROJECT_DIR/py" "$XC" -type d -name 'lib-dynload' -print 2>/dev/null | head -30 >&2
   exit 1
-}
+fi
+if ! find "$DYNLOAD" -maxdepth 1 -type f -name 'math*.so' -print -quit | grep -q .; then
+  echo "error: math native extension is missing from $DYNLOAD" >&2
+  find "$DYNLOAD" -maxdepth 1 -type f -name '*.so' -print | head -50 >&2
+  exit 1
+fi
 
 PYVER=$(ls -1 "$APP/python/lib" | grep '^python3' | head -1)
 echo "Python lib folder: $PYVER"
