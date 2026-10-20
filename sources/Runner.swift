@@ -38,11 +38,26 @@ final class Runner: ObservableObject {
     init() {
         if let err = PythonBridge.start() {
             status = "Python failed: \(err)"
-        } else {
-            ready = true
-            status = "Python ready"
-            Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { [weak self] _ in
-                self?.poll()
+            return
+        }
+
+        // Importing NumPy can take noticeable time on first launch. Keep that
+        // work off the main thread so the editor can render and show status.
+        status = "Checking Python and NumPy…"
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let result = PythonBridge.call("check_runtime", arg: "")
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                if result.hasPrefix("error:") {
+                    self.status = "Python failed: \(result)"
+                    return
+                }
+
+                self.ready = true
+                self.status = result
+                Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { [weak self] _ in
+                    self?.poll()
+                }
             }
         }
     }
