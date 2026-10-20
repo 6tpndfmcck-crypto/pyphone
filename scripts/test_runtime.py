@@ -95,6 +95,10 @@ def main():
     while runner._cb_tid[0] == 0 and time.monotonic() < deadline:
         time.sleep(0.01)
     assert runner._cb_tid[0] != 0, "UI callback did not start"
+    callback_state = json.loads(runner.get_state())
+    assert callback_state["running"] and callback_state["tid"] != 0, (
+        "Active UI callback was not represented as running"
+    )
     runner.run_code("print('callback-overlap-should-not-run')")
     callback.join(timeout=5)
     assert not callback.is_alive(), "UI callback did not finish"
