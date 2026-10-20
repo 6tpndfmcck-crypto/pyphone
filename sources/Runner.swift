@@ -27,8 +27,9 @@ final class Runner: ObservableObject {
     private var lastSeq = -1
     private var tid = 0
     private var inFlight = false
-    private let eventQueue = DispatchQueue(label: "py.events")
-    private let ctrlQueue = DispatchQueue(label: "py.control")
+    // All native-to-Python calls share one serial queue. A state read and its
+    // matching output read must not interleave with another poll or UI event.
+    private let pythonQueue = DispatchQueue(label: "py.bridge")
 
     init() {
         if let err = PythonBridge.start() {
@@ -46,7 +47,7 @@ final class Runner: ObservableObject {
         guard ready else { return }
         output = ""
         pending += 1
-        eventQueue.async { [self] in
+        pythonQueue.async { [self] in
             let r = PythonBridge.call("run_code", arg: code)
             let (st, out) = fetch()
             DispatchQueue.main.async {
@@ -58,12 +59,12 @@ final class Runner: ObservableObject {
     func stop() {
         guard tid != 0 else { return }
         let t = UInt(tid)
-        ctrlQueue.async { PythonBridge.stopThread(t) }
+        pythonQueue.async { PythonBridge.stopThread(t) }
     }
 
     func submitInput(_ text: String) {
         prompt = nil
-        ctrlQueue.async { _ = PythonBridge.call("input_reply", arg: text) }
+        pythonQueue.async { _ = PythonBridge.call("input_reply", arg: text) }
     }
 
     func tap(_ id: Int) { send(id, "tap", "") }
@@ -79,7 +80,7 @@ final class Runner: ObservableObject {
         guard let data = try? JSONSerialization.data(withJSONObject: payload),
               let json = String(data: data, encoding: .utf8) else { return }
         pending += 1
-        eventQueue.async { [self] in
+        pythonQueue.async { [self] in
             _ = PythonBridge.call("send_event", arg: json)
             let (st, out) = fetch()
             DispatchQueue.main.async { self.finish(st, extra: out, fromEvent: true) }
@@ -89,7 +90,7 @@ final class Runner: ObservableObject {
     private func poll() {
         guard ready, !inFlight else { return }
         inFlight = true
-        ctrlQueue.async { [self] in
+        pythonQueue.async { [self] in
             let (st, out) = fetch()
             DispatchQueue.main.async {
                 self.inFlight = false
