@@ -5,6 +5,7 @@ build/
 py/
 Python.xcframework/
 PyPhone.xcodeproj/
+sources/Info.plist
 CodeWindow.xcodeproj/
 .build-venv/
 python-stdlib/
