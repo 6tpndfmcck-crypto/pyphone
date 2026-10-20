@@ -8,20 +8,24 @@ STDLIB="$PROJECT_DIR/python-stdlib/python3.13"
 
 if [ "$EFFECTIVE_PLATFORM_NAME" = "-iphonesimulator" ]; then
   SLICE="ios-arm64_x86_64-simulator"
+  ARCH="${CURRENT_ARCH:-arm64}"
+  # Some Xcode aggregate/script phases report undefined_arch; arm64 is the
+  # correct default for current Apple-silicon simulator builds.
+  if [ "$ARCH" = "undefined_arch" ]; then ARCH="arm64"; fi
+  LIBROOT="$XC/$SLICE/lib-$ARCH"
 else
   SLICE="ios-arm64"
+  LIBROOT="$XC/$SLICE/lib-arm64"
 fi
 
-# BeeWare's XCFramework nests each architecture's Python files under
-# lib-arm64 (and, for the simulator, lib-x86_64). Copy the device slice's
-# contents, not the parent "lib" folder, or lib-dynload ends up one level
-# too deep and Python cannot import native modules such as math.
-LIBROOT="$XC/$SLICE/lib-arm64"
-if [ ! -d "$LIBROOT/python3.13/lib-dynload" ]; then
+# BeeWare's XCFramework stores Python files in the architecture-specific
+# lib-arm64/lib-x86_64 folder. Older package layouts may put them directly
+# under lib/, so use that only when it contains the expected Python tree.
+if [ ! -d "$LIBROOT/python3.13/lib-dynload" ] && [ -d "$XC/$SLICE/lib/python3.13/lib-dynload" ]; then
   LIBROOT="$XC/$SLICE/lib"
 fi
-if [ ! -d "$LIBROOT" ]; then
-  echo "error: Python library directory not found: $LIBROOT" >&2
+if [ ! -d "$LIBROOT/python3.13/lib-dynload" ]; then
+  echo "error: Python native modules directory not found under $LIBROOT" >&2
   ls -R "$XC/$SLICE" | head -80 >&2
   exit 1
 fi
