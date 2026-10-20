@@ -12,9 +12,17 @@ else
   SLICE="ios-arm64"
 fi
 
-if [ ! -d "$XC/$SLICE/lib" ]; then
-  echo "error: $XC/$SLICE/lib not found. Layout is:" >&2
-  ls -R "$XC" | head -40 >&2
+# BeeWare's XCFramework nests each architecture's Python files under
+# lib-arm64 (and, for the simulator, lib-x86_64). Copy the device slice's
+# contents, not the parent "lib" folder, or lib-dynload ends up one level
+# too deep and Python cannot import native modules such as math.
+LIBROOT="$XC/$SLICE/lib-arm64"
+if [ ! -d "$LIBROOT/python3.13/lib-dynload" ]; then
+  LIBROOT="$XC/$SLICE/lib"
+fi
+if [ ! -d "$LIBROOT" ]; then
+  echo "error: Python library directory not found: $LIBROOT" >&2
+  ls -R "$XC/$SLICE" | head -80 >&2
   exit 1
 fi
 if [ ! -f "$STDLIB/encodings/__init__.py" ]; then
@@ -24,7 +32,7 @@ fi
 
 mkdir -p "$APP/python/lib"
 # This directory contains libpython3.13.dylib.
-rsync -au --delete "$XC/$SLICE/lib/" "$APP/python/lib/"
+rsync -au --delete "$LIBROOT/" "$APP/python/lib/"
 # The support archive's standard library is separate from the XCFramework's
 # lib/ directory, so copy it into the expected python/lib/python3.13 location.
 mkdir -p "$APP/python/lib/python3.13"
@@ -47,7 +55,8 @@ if ! find "$DYNLOAD" -maxdepth 1 -type f -name 'math*.so' -print -quit | grep -q
   exit 1
 fi
 
-PYVER=$(ls -1 "$APP/python/lib" | grep '^python3' | head -1)
+PYVER="python3.13"
+test -d "$APP/python/lib/$PYVER" || { echo "error: $PYVER was not installed under $APP/python/lib" >&2; find "$APP/python/lib" -maxdepth 3 -type d -print | head -50 >&2; exit 1; }
 echo "Python lib folder: $PYVER"
 
 install_dylib () {
