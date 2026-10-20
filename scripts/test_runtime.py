@@ -47,6 +47,11 @@ def main():
 
     import runner
 
+    runtime_status = runner.check_runtime()
+    assert runtime_status.startswith("Python ready · NumPy "), (
+        "Python runtime preflight failed: " + repr(runtime_status)
+    )
+
     # Verify the runner starts, executes code, and prevents overlapping runs.
     runner.run_code(
         "import math, datetime, json, time\n"
