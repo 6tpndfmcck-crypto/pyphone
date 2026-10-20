@@ -73,7 +73,7 @@ def run_code(code):
     # Reserve the runner before starting the worker. Otherwise, two rapid Run
     # taps can both observe a zero thread ID before either worker starts.
     with _run_lock:
-        if _running[0]:
+        if _running[0] or _cb_tid[0]:
             print("Already running. Stop it first.")
             return ""
         _running[0] = True
@@ -110,7 +110,7 @@ def get_state(_=""):
     tid = _run_tid[0] or _cb_tid[0]
     return json.dumps({
         "widgets": ui._state(),
-        "running": bool(_running[0]),
+        "running": bool(_running[0] or _cb_tid[0]),
         "prompt": _prompt[0],
         "tid": tid,
         "seq": ui._seq[0],
@@ -120,7 +120,8 @@ def get_state(_=""):
 def send_event(arg):
     d = json.loads(arg)
     if d["kind"] == "tap":
-        _cb_tid[0] = threading.get_ident()
+        with _run_lock:
+            _cb_tid[0] = threading.get_ident()
     try:
         ui._event(d["id"], d["kind"], d.get("value", ""))
     except KeyboardInterrupt:
@@ -128,7 +129,9 @@ def send_event(arg):
     except BaseException:
         traceback.print_exc()
     finally:
-        _cb_tid[0] = 0
+        if d["kind"] == "tap":
+            with _run_lock:
+                _cb_tid[0] = 0
     ui._seq[0] += 1
     return ""
 
