@@ -26,6 +26,8 @@ sys.stderr = _out
 import ui
 
 _run_tid = [0]
+_run_lock = threading.Lock()
+_running = [False]
 _cb_tid = [0]
 _prompt = [None]
 _reply = [""]
@@ -52,7 +54,8 @@ builtins.input = _input
 
 
 def _worker(code, started):
-    _run_tid[0] = threading.get_ident()
+    with _run_lock:
+        _run_tid[0] = threading.get_ident()
     started.set()
     try:
         exec(compile(code, "<code>", "exec"), {"__name__": "__main__"})
@@ -61,17 +64,34 @@ def _worker(code, started):
     except BaseException:
         traceback.print_exc()
     finally:
-        _run_tid[0] = 0
+        with _run_lock:
+            _run_tid[0] = 0
+            _running[0] = False
 
 
 def run_code(code):
-    if _run_tid[0]:
-        print("Already running. Stop it first.")
-        return ""
+    # Reserve the runner before starting the worker. Otherwise, two rapid Run
+    # taps can both observe a zero thread ID before either worker starts.
+    with _run_lock:
+        if _running[0]:
+            print("Already running. Stop it first.")
+            return ""
+        _running[0] = True
+
     ui._reset()
     started = threading.Event()
-    threading.Thread(target=_worker, args=(code, started), daemon=True).start()
-    started.wait(2)
+    worker = threading.Thread(target=_worker, args=(code, started), daemon=True)
+    try:
+        worker.start()
+    except BaseException:
+        with _run_lock:
+            _running[0] = False
+        raise
+
+    if not started.wait(2):
+        with _run_lock:
+            _running[0] = False
+        print("Could not start the Python worker.")
     return ""
 
 
@@ -85,7 +105,7 @@ def get_state(_=""):
     tid = _run_tid[0] or _cb_tid[0]
     return json.dumps({
         "widgets": ui._state(),
-        "running": bool(tid),
+        "running": bool(_running[0]),
         "prompt": _prompt[0],
         "tid": tid,
         "seq": ui._seq[0],
