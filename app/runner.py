@@ -26,7 +26,7 @@ sys.stderr = _out
 import ui
 
 _run_tid = [0]
-_run_lock = threading.Lock()
+_run_lock = threading.RLock()
 _running = [False]
 _cb_tid = [0]
 _prompt = [None]
