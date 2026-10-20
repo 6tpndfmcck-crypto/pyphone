@@ -28,9 +28,14 @@ rsync -au --delete "$XC/$SLICE/lib/" "$APP/python/lib/"
 # The support archive's standard library is separate from the XCFramework's
 # lib/ directory, so copy it into the expected python/lib/python3.13 location.
 mkdir -p "$APP/python/lib/python3.13"
-# Preserve native modules from Python.xcframework while copying the pure-Python stdlib.
-rsync -au --delete --exclude='lib-dynload/' "$STDLIB/" "$APP/python/lib/python3.13/"
-test -d "$APP/python/lib/python3.13/lib-dynload"
+# Copy the complete standard library, including native extension modules.
+# The loop below converts each .so in lib-dynload into an iOS framework.
+rsync -au --delete "$STDLIB/" "$APP/python/lib/python3.13/"
+test -d "$APP/python/lib/python3.13/lib-dynload" || {
+  echo "error: Python support archive has no lib-dynload directory under $STDLIB" >&2
+  find "$STDLIB" -maxdepth 3 -type d -name 'lib-dynload' -print >&2
+  exit 1
+}
 
 PYVER=$(ls -1 "$APP/python/lib" | grep '^python3' | head -1)
 echo "Python lib folder: $PYVER"
