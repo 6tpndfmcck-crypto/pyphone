@@ -29,6 +29,7 @@ final class Runner: ObservableObject {
     private var tid = 0
     private var inFlight = false
     private var suppressPromptUntilInputClears = false
+    private var stopRequested = false
     // All native-to-Python calls share one serial queue. A state read and its
     // matching output read must not interleave with another poll or UI event.
     private let pythonQueue = DispatchQueue(label: "py.bridge")
@@ -67,8 +68,12 @@ final class Runner: ObservableObject {
     }
 
     func run(_ code: String) {
-        guard ready else { return }
+        // Keep the Run button from queueing duplicate programs before the first
+        // state poll returns from Python.
+        guard ready, !running, pending == 0 else { return }
         output = ""
+        running = true
+        stopRequested = false
         pending += 1
         pythonQueue.async { [self] in
             let r = PythonBridge.call("run_code", arg: code)
@@ -80,8 +85,15 @@ final class Runner: ObservableObject {
     }
 
     func stop() {
-        guard tid != 0 else { return }
+        guard running || pending > 0 else { return }
+        guard tid != 0 else {
+            // The Python worker may not have published its thread ID yet.
+            // Defer the interrupt until the next state response supplies it.
+            stopRequested = true
+            return
+        }
         let t = UInt(tid)
+        stopRequested = false
         controlQueue.async { PythonBridge.stopThread(t) }
     }
 
@@ -135,7 +147,11 @@ final class Runner: ObservableObject {
         if fromEvent { pending -= 1 }
         output += extra
         guard let st = st else { return }
-        running = st.running
+        if pending == 0 {
+            running = st.running
+        } else if st.running {
+            running = true
+        }
         if suppressPromptUntilInputClears {
             if st.prompt == nil { suppressPromptUntilInputClears = false }
             prompt = nil
@@ -143,6 +159,15 @@ final class Runner: ObservableObject {
             prompt = st.prompt
         }
         tid = st.tid
+        if stopRequested {
+            if tid != 0 {
+                let target = UInt(tid)
+                stopRequested = false
+                controlQueue.async { PythonBridge.stopThread(target) }
+            } else if pending == 0 && !st.running {
+                stopRequested = false
+            }
+        }
         if pending == 0 && st.seq >= lastSeq {
             widgets = st.widgets
             lastSeq = st.seq
