@@ -148,7 +148,7 @@ workflows:
           zip -qry PyPhone.ipa Payload
           # Put the IPA inside a ZIP so Codemagic/iPhone can download it reliably.
           rm -f PyPhone_ipa.zip
-          zip -qry PyPhone_ipa.zip PyPhone.ipa
+          zip -9 -qry PyPhone_ipa.zip PyPhone.ipa
           ls -lh PyPhone.ipa PyPhone_ipa.zip
 
       - name: Verify build before publishing artifacts
