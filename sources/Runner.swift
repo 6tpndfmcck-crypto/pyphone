@@ -27,6 +27,7 @@ final class Runner: ObservableObject {
     private var lastSeq = -1
     private var tid = 0
     private var inFlight = false
+    private var suppressPromptUntilInputClears = false
     // All native-to-Python calls share one serial queue. A state read and its
     // matching output read must not interleave with another poll or UI event.
     private let pythonQueue = DispatchQueue(label: "py.bridge")
@@ -66,6 +67,9 @@ final class Runner: ObservableObject {
     }
 
     func submitInput(_ text: String) {
+        // Prevent a poll that raced with input_reply from presenting the same
+        // alert again before Python clears its prompt.
+        suppressPromptUntilInputClears = true
         prompt = nil
         controlQueue.async { _ = PythonBridge.call("input_reply", arg: text) }
     }
@@ -113,7 +117,12 @@ final class Runner: ObservableObject {
         output += extra
         guard let st = st else { return }
         running = st.running
-        prompt = st.prompt
+        if suppressPromptUntilInputClears {
+            if st.prompt == nil { suppressPromptUntilInputClears = false }
+            prompt = nil
+        } else {
+            prompt = st.prompt
+        }
         tid = st.tid
         if pending == 0 && st.seq >= lastSeq {
             widgets = st.widgets
