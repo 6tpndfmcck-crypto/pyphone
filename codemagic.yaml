@@ -91,12 +91,15 @@ workflows:
       - name: test Python source and runner
         script: |
           set -euo pipefail
-          PYTHON_BIN="$(brew --prefix python@3.13)/bin/python3.13"
+          BUILD_PYTHON="$PWD/.build-venv/bin/python"
           export PYTHONDONTWRITEBYTECODE=1
           export PYTHONPYCACHEPREFIX=/tmp/pyphone-pycache
           rm -rf "$PYTHONPYCACHEPREFIX"
-          "$PYTHON_BIN" -m py_compile app/runner.py app/ui.py scripts/test_runtime.py
-          "$PYTHON_BIN" scripts/test_runtime.py
+          # The app_packages folder contains iOS-only wheels, so install a
+          # separate host NumPy into the isolated build venv for test execution.
+          "$BUILD_PYTHON" -m pip install --only-binary=:all: "numpy==2.5.2.post1"
+          "$BUILD_PYTHON" -m py_compile app/runner.py app/ui.py scripts/test_runtime.py
+          "$BUILD_PYTHON" scripts/test_runtime.py
           test -f app_packages/numpy/__init__.py
           find app_packages/numpy -type f -name '*.so' -print -quit | grep -q .
           echo "Python source, runner, UI callbacks, and NumPy package checks passed."
