@@ -146,9 +146,29 @@ workflows:
           mkdir Payload
           cp -R "$APP_PATH" Payload/
           zip -qry PyPhone.ipa Payload
-          # Put the IPA inside a ZIP so Codemagic/iPhone can download it reliably.
+          # Build a plain, standards-compliant outer ZIP using Python's ZIP_STORED.
+          # The IPA is already a ZIP, so recompressing it is unnecessary and can
+          # make archive handling less predictable in mobile file managers.
           rm -f PyPhone_ipa.zip
-          zip -9 -qry PyPhone_ipa.zip PyPhone.ipa
+          python3 - <<'PY'
+          import hashlib
+          import zipfile
+          from pathlib import Path
+
+          ipa = Path("PyPhone.ipa")
+          archive = Path("PyPhone_ipa.zip")
+          original_hash = hashlib.sha256(ipa.read_bytes()).hexdigest()
+
+          with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_STORED) as zf:
+              zf.write(ipa, arcname="PyPhone.ipa")
+
+          with zipfile.ZipFile(archive, "r") as zf:
+              assert zf.namelist() == ["PyPhone.ipa"], zf.namelist()
+              assert zf.testzip() is None, "Outer ZIP CRC verification failed"
+              extracted = zf.read("PyPhone.ipa")
+          assert hashlib.sha256(extracted).hexdigest() == original_hash, "Embedded IPA differs from original"
+          print("Outer ZIP verified; embedded IPA matches byte-for-byte.")
+          PY
           ls -lh PyPhone.ipa PyPhone_ipa.zip
 
       - name: Verify build before publishing artifacts
