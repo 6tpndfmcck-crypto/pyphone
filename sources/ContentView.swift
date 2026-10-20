@@ -173,8 +173,10 @@ struct ContentView: View {
                 inputText = ""
             }
             Button("Stop", role: .cancel) {
-                runner.submitInput("")
+                // Interrupt the waiting Python worker directly; replying with
+                // an empty string first can let the user's code continue.
                 runner.stop()
+                inputText = ""
             }
         } message: {
             Text(runner.prompt ?? "")
