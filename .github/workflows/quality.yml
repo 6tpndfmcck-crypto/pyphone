@@ -26,7 +26,12 @@ jobs:
         env:
           PYTHONDONTWRITEBYTECODE: "1"
           PYTHONPYCACHEPREFIX: ${{ runner.temp }}/pyphone-pycache
-        run: python -m py_compile app/runner.py app/ui.py scripts/test_runtime.py
+        run: python -m py_compile app/runner.py app/ui.py scripts/test_runtime.py scripts/test_contracts.py
+      - name: Test cross-file interfaces and build resources
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+          PYTHONPYCACHEPREFIX: ${{ runner.temp }}/pyphone-pycache
+        run: python scripts/test_contracts.py
       - name: Test runner, UI callbacks, input, and error output
         env:
           PYTHONDONTWRITEBYTECODE: "1"
