@@ -127,14 +127,21 @@ workflows:
           test -f "$APP_PATH/Info.plist"
           plutil -lint "$APP_PATH/Info.plist"
           test -f "$APP_PATH/python/lib/python3.13/encodings/__init__.py"
+          test -f "$APP_PATH/python/lib/python3.13/datetime.py"
           test -f "$APP_PATH/app_packages/numpy/__init__.py"
+          test -f "$APP_PATH/app_packages/numpy/_core/__init__.py"
 
+          # This is an iOS device build, so the CI Mac cannot directly import
+          # its ARM64 iOS extension modules. Verify the exact files needed by
+          # Python's standard library and NumPy are bundled before packaging.
           echo "Checking Python standard-library native frameworks..."
-          test -f "$APP_PATH/Frameworks/math.framework/math" || {
-            echo "Python math framework is missing."
-            find "$APP_PATH/Frameworks" -maxdepth 1 -iname '*math*' -print
-            exit 1
-          }
+          for module in math _datetime; do
+            test -f "$APP_PATH/Frameworks/$module.framework/$module" || {
+              echo "Python native framework is missing: $module"
+              find "$APP_PATH/Frameworks" -maxdepth 1 -iname '*math*' -o -iname '*datetime*' -print
+              exit 1
+            }
+          done
 
           echo "Checking NumPy native frameworks..."
           find "$APP_PATH/Frameworks" -maxdepth 1 -name 'numpy*framework' -print | grep -q .
