@@ -5,8 +5,10 @@ Run with the build Mac's Python 3.13 before compiling the iOS app. The
 iOS-only NumPy binary is checked separately during packaging and at app startup.
 """
 import datetime
+import json
 import math
 import sys
+import threading
 import time
 import traceback
 from pathlib import Path
@@ -81,6 +83,26 @@ def main():
     wait_for_runner(runner)
     output = runner.take_output()
     assert "SyntaxError" in output, "Python syntax error was not shown in output"
+
+    # A UI callback can outlive the original script. Verify a new Run is
+    # rejected while a button callback is still active.
+    ui._reset()
+    slow_button = ui.button("slow", lambda: time.sleep(0.3))
+    event = json.dumps({"id": slow_button.id, "kind": "tap", "value": ""})
+    callback = threading.Thread(target=runner.send_event, args=(event,))
+    callback.start()
+    deadline = time.monotonic() + 5
+    while runner._cb_tid[0] == 0 and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert runner._cb_tid[0] != 0, "UI callback did not start"
+    runner.run_code("print('callback-overlap-should-not-run')")
+    callback.join(timeout=5)
+    assert not callback.is_alive(), "UI callback did not finish"
+    output = runner.take_output()
+    assert "Already running" in output, "Run was not blocked during a UI callback"
+    assert "callback-overlap-should-not-run" not in output, (
+        "Code ran concurrently with a UI callback"
+    )
 
 
 try:
