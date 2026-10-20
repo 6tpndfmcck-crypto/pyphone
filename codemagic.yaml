@@ -29,12 +29,16 @@ workflows:
           PYTHON_BIN="$(brew --prefix python@3.13)/bin/python3.13"
           "$PYTHON_BIN" --version
 
+          # Start from a clean workspace so stale packages or an old XCFramework
+          # can never leak into a later build.
+          rm -rf py Python.xcframework python-stdlib app_packages .build-venv
+          mkdir -p py
+
           # Use the known release URL directly to avoid GitHub API rate limits.
           ASSET_URL="https://github.com/beeware/Python-Apple-support/releases/download/3.13-b16/Python-3.13-iOS-support.b16.tar.gz"
 
           echo "Downloading Python support archive: $ASSET_URL"
           curl -fL "$ASSET_URL" -o Python-3.13-iOS-support.tar.gz
-          mkdir -p py
           tar -xzf Python-3.13-iOS-support.tar.gz -C py
 
           XCF="$(find py -maxdepth 7 -name Python.xcframework -type d -print -quit)"
