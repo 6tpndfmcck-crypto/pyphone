@@ -138,7 +138,7 @@ workflows:
           for module in math _datetime; do
             test -f "$APP_PATH/Frameworks/$module.framework/$module" || {
               echo "Python native framework is missing: $module"
-              find "$APP_PATH/Frameworks" -maxdepth 1 -iname '*math*' -o -iname '*datetime*' -print
+              find "$APP_PATH/Frameworks" -maxdepth 1 \( -iname '*math*' -o -iname '*datetime*' \) -print
               exit 1
             }
           done
