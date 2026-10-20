@@ -58,8 +58,23 @@ static NSString *exceptionText(void) {
     }
     NSString *stdlib = [libDir stringByAppendingPathComponent:ver];
     NSString *dynload = [stdlib stringByAppendingPathComponent:@"lib-dynload"];
-    BOOL hasEnc = [fm fileExistsAtPath:[stdlib stringByAppendingPathComponent:@"encodings"]];
-    NSString *diag = [NSString stringWithFormat:@"[%@ encodings=%d]", ver, hasEnc];
+    NSString *runnerFile = [app stringByAppendingPathComponent:@"runner.py"];
+    NSString *encodingsFile = [stdlib stringByAppendingPathComponent:@"encodings/__init__.py"];
+    BOOL hasEnc = [fm fileExistsAtPath:encodingsFile];
+    NSString *diag = [NSString stringWithFormat:@"[%@ encodings=%d dynload=%d runner=%d]",
+                      ver,
+                      hasEnc,
+                      [fm fileExistsAtPath:dynload],
+                      [fm fileExistsAtPath:runnerFile]];
+    if (!hasEnc) {
+        return [NSString stringWithFormat:@"Python standard library is incomplete: %@ %@", encodingsFile, diag];
+    }
+    if (![fm fileExistsAtPath:dynload]) {
+        return [NSString stringWithFormat:@"Python native modules folder is missing: %@ %@", dynload, diag];
+    }
+    if (![fm fileExistsAtPath:runnerFile]) {
+        return [NSString stringWithFormat:@"Python app runner is missing: %@ %@", runnerFile, diag];
+    }
 
     PyStatus status;
     PyPreConfig pre;
@@ -81,18 +96,20 @@ static NSString *exceptionText(void) {
         PyConfig_Clear(&config);
         return [NSString stringWithFormat:@"config: %s", status.err_msg ?: "unknown"];
     }
-    status = PyConfig_Read(&config);
-    if (PyStatus_Exception(status)) {
-        PyConfig_Clear(&config);
-        return [NSString stringWithFormat:@"read: %s %@", status.err_msg ?: "unknown", diag];
-    }
-
-    // Set the module search path explicitly: stdlib, binary modules, app code.
+    // Use only the paths packaged with this app. PyConfig_Read() would first
+    // populate module_search_paths with inferred defaults; appending our paths
+    // after that can make imports depend on paths that are not in the bundle.
+    // With module_search_paths_set enabled on the fresh isolated config,
+    // CPython calculates its prefix metadata but keeps this explicit list.
     config.module_search_paths_set = 1;
     NSString *pkgs = [res stringByAppendingPathComponent:@"app_packages"];
     NSArray<NSString *> *paths = @[stdlib, dynload, app, pkgs];
     for (NSString *p in paths) {
         wchar_t *w = Py_DecodeLocale(p.UTF8String, NULL);
+        if (w == NULL) {
+            PyConfig_Clear(&config);
+            return [NSString stringWithFormat:@"could not convert Python import path to Unicode: %@", p];
+        }
         status = PyWideStringList_Append(&config.module_search_paths, w);
         PyMem_RawFree(w);
         if (PyStatus_Exception(status)) {
