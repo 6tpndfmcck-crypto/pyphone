@@ -153,6 +153,47 @@ workflows:
             }
           done
 
+          echo "Checking native module marker files..."
+          for module in math _datetime; do
+            find "$APP_PATH/python/lib/python3.13/lib-dynload" -maxdepth 1 -type f -name "$module*.fwork" -print -quit | grep -q . || {
+              echo "Python import marker is missing for $module"
+              exit 1
+            }
+          done
+          find "$APP_PATH/app_packages/numpy" -type f -name '*.fwork' -print -quit | grep -q . || {
+            echo "NumPy native import markers are missing."
+            exit 1
+          }
+
+          # Every .fwork marker must point to an existing framework binary,
+          # and that framework must point back to the marker's original path.
+          while IFS= read -r -d '' marker; do
+            target="$(cat "$marker")"
+            case "$target" in
+              Frameworks/*.framework/*) ;;
+              *) echo "Invalid framework target in $marker: $target"; exit 1 ;;
+            esac
+            test -f "$APP_PATH/$target" || {
+              echo "Framework binary referenced by $marker is missing: $target"
+              exit 1
+            }
+            test -f "$APP_PATH/$target.origin" || {
+              echo "Framework origin file is missing: $target.origin"
+              exit 1
+            }
+            origin="$(cat "$APP_PATH/$target.origin")"
+            test -f "$APP_PATH/$origin" || {
+              echo "Original .fwork marker referenced by $target.origin is missing: $origin"
+              exit 1
+            }
+          done < <(find "$APP_PATH/python/lib/python3.13/lib-dynload" "$APP_PATH/app_packages" -type f -name '*.fwork' -print0)
+
+          if find "$APP_PATH/python/lib/python3.13/lib-dynload" "$APP_PATH/app_packages" -type f -name '*.so' -print -quit | grep -q .; then
+            echo "A native .so module was left outside the Frameworks directory."
+            find "$APP_PATH/python/lib/python3.13/lib-dynload" "$APP_PATH/app_packages" -type f -name '*.so' -print | head -30
+            exit 1
+          fi
+
           echo "Checking NumPy native frameworks..."
           find "$APP_PATH/Frameworks" -maxdepth 1 -name 'numpy*framework' -print | grep -q .
 
