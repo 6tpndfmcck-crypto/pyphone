@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 
 struct Widget: Identifiable, Decodable {
     let id: Int
