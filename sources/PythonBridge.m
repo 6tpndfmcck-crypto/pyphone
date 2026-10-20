@@ -124,21 +124,8 @@ static NSString *exceptionText(void) {
         return [NSString stringWithFormat:@"init: %s %@", status.err_msg ?: "unknown", diag];
     }
 
-    // Fail at startup with a useful message if the embedded runtime cannot
-    // load the standard modules or NumPy. This checks the same import path the
-    // user's code will use, rather than only checking that files exist.
-    NSArray<NSString *> *requiredModules = @[@"datetime", @"math", @"numpy"];
-    for (NSString *moduleName in requiredModules) {
-        PyObject *module = PyImport_ImportModule(moduleName.UTF8String);
-        if (!module) {
-            NSString *message = [NSString stringWithFormat:@"required Python module %@ failed: %@",
-                                 moduleName, exceptionText()];
-            PyEval_SaveThread();
-            return message;
-        }
-        Py_DECREF(module);
-    }
-
+    // Import the runner first; its datetime import happens on this startup
+    // thread before native packages such as NumPy are loaded in the background.
     PyObject *m = PyImport_ImportModule("runner");
     if (!m) {
         NSString *message = [@"runner import failed: " stringByAppendingString:exceptionText()];
