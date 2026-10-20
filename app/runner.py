@@ -89,9 +89,14 @@ def run_code(code):
         raise
 
     if not started.wait(2):
-        with _run_lock:
-            _running[0] = False
-        print("Could not start the Python worker.")
+        # A started thread may simply be waiting for a scheduling slot. Don't
+        # clear the reservation while it could still begin executing.
+        if not worker.is_alive():
+            with _run_lock:
+                _running[0] = False
+            print("Could not start the Python worker.")
+        else:
+            print("Python worker startup is taking longer than expected.")
     return ""
 
 
