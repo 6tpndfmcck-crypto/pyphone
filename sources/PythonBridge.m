@@ -8,7 +8,11 @@ static NSString *exceptionText(void) {
     PyObject *s = PyObject_Str(exc);
     if (s) {
         const char *c = PyUnicode_AsUTF8(s);
-        if (c) out = [NSString stringWithUTF8String:c];
+        if (c) {
+            out = [NSString stringWithUTF8String:c] ?: @"Python error";
+        } else {
+            PyErr_Clear();
+        }
         Py_DECREF(s);
     } else {
         PyErr_Clear();
@@ -93,8 +97,9 @@ static NSString *exceptionText(void) {
 
     status = PyConfig_SetBytesString(&config, &config.home, home.UTF8String);
     if (PyStatus_Exception(status)) {
+        NSString *message = [NSString stringWithFormat:@"config: %s", status.err_msg ?: "unknown"];
         PyConfig_Clear(&config);
-        return [NSString stringWithFormat:@"config: %s", status.err_msg ?: "unknown"];
+        return message;
     }
     // Use only the paths packaged with this app. PyConfig_Read() would first
     // populate module_search_paths with inferred defaults; appending our paths
@@ -113,16 +118,19 @@ static NSString *exceptionText(void) {
         status = PyWideStringList_Append(&config.module_search_paths, w);
         PyMem_RawFree(w);
         if (PyStatus_Exception(status)) {
+            NSString *message = [NSString stringWithFormat:@"path: %s", status.err_msg ?: "unknown"];
             PyConfig_Clear(&config);
-            return [NSString stringWithFormat:@"path: %s", status.err_msg ?: "unknown"];
+            return message;
         }
     }
 
     status = Py_InitializeFromConfig(&config);
-    PyConfig_Clear(&config);
     if (PyStatus_Exception(status)) {
-        return [NSString stringWithFormat:@"init: %s %@", status.err_msg ?: "unknown", diag];
+        NSString *message = [NSString stringWithFormat:@"init: %s %@", status.err_msg ?: "unknown", diag];
+        PyConfig_Clear(&config);
+        return message;
     }
+    PyConfig_Clear(&config);
 
     // Import the runner first; its datetime import happens on this startup
     // thread before native packages such as NumPy are loaded in the background.
@@ -151,7 +159,12 @@ static NSString *exceptionText(void) {
             result = [@"error: " stringByAppendingString:exceptionText()];
         } else {
             const char *c = PyUnicode_AsUTF8(r);
-            if (c) result = [NSString stringWithUTF8String:c] ?: @"";
+            if (c) {
+                result = [NSString stringWithUTF8String:c] ?: @"";
+            } else {
+                PyErr_Clear();
+                result = @"error: Python result was not valid UTF-8 text";
+            }
             Py_DECREF(r);
         }
         Py_DECREF(mod);
@@ -162,7 +175,12 @@ static NSString *exceptionText(void) {
 
 + (void)stopThread:(unsigned long)ident {
     PyGILState_STATE g = PyGILState_Ensure();
-    PyThreadState_SetAsyncExc(ident, PyExc_KeyboardInterrupt);
+    int changed = PyThreadState_SetAsyncExc(ident, PyExc_KeyboardInterrupt);
+    // CPython documents that more than one changed thread state is an error;
+    // undo the pending exception rather than accidentally interrupting extras.
+    if (changed > 1) {
+        PyThreadState_SetAsyncExc(ident, NULL);
+    }
     PyGILState_Release(g);
 }
 
