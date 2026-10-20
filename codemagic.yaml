@@ -246,6 +246,5 @@ workflows:
 
     artifacts:
       - PyPhone_ipa.zip
-      - PyPhone.ipa
       - PyPhone_SHA256.txt
       - /tmp/xcodebuild.log
