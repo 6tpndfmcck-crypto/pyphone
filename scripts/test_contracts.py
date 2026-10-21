@@ -80,7 +80,9 @@ require("Python.xcframework" in codemagic and "requirements.txt" in codemagic an
 require("--python-version 3.13" in codemagic and "--abi cp313" in codemagic and
         "--platform ios_13_0_arm64_iphoneos" in codemagic,
         "Codemagic NumPy wheel target does not match the Python/iOS runtime")
-require(requirements.strip() == "numpy==2.5.2.post1",
+require("numpy==2.5.2.post1" in requirements.splitlines(),
         "iOS NumPy dependency must remain pinned to the tested BeeWare wheel")
+require("pip==25.2" in requirements.splitlines(),
+        "pip must remain pinned as a PyPhone dependency")
 
 print("PyPhone cross-file interface and build-resource checks passed.")
