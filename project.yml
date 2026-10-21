@@ -33,6 +33,7 @@ targets:
         CURRENT_PROJECT_VERSION: "1"
         GENERATE_INFOPLIST_FILE: NO
         SWIFT_VERSION: "5.0"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         SWIFT_OBJC_BRIDGING_HEADER: sources/Bridging-Header.h
         ENABLE_USER_SCRIPT_SANDBOXING: NO
     postBuildScripts:
