@@ -80,6 +80,20 @@ static NSString *exceptionText(void) {
         return [NSString stringWithFormat:@"Python app runner is missing: %@ %@", runnerFile, diag];
     }
 
+    // Expose the app's Documents folder in iOS Files and give Python a stable
+    // location for incoming wheels and installed pure-Python packages.
+    NSString *documents = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
+    if (documents.length) {
+        for (NSString *folder in @[@"Packages", @"Installed", @"InstalledPackages"]) {
+            NSString *path = [documents stringByAppendingPathComponent:folder];
+            NSError *folderError = nil;
+            if (![fm createDirectoryAtPath:path withIntermediateDirectories:YES attributes:nil error:&folderError] && folderError) {
+                return [NSString stringWithFormat:@"could not create package folder %@: %@", folder, folderError.localizedDescription];
+            }
+        }
+        setenv("PYPHONE_DOCUMENTS", documents.UTF8String, 1);
+    }
+
     PyStatus status;
     PyPreConfig pre;
     PyPreConfig_InitIsolatedConfig(&pre);
