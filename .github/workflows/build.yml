@@ -1,0 +1,228 @@
+name: PyPhone iOS Build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pyphone-ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build unsigned iOS IPA
+    runs-on: macos-15
+    timeout-minutes: 120
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: |
+          set -euo pipefail
+          brew install xcodegen python@3.13
+
+      - name: Prepare Python runtime and NumPy
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHON_BIN="$(brew --prefix python@3.13)/bin/python3.13"
+          "$PYTHON_BIN" --version
+          rm -rf py Python.xcframework python-stdlib app_packages .build-venv
+          mkdir -p py
+          ASSET_URL="https://github.com/beeware/Python-Apple-support/releases/download/3.13-b16/Python-3.13-iOS-support.b16.tar.gz"
+          echo "Downloading Python support archive: $ASSET_URL"
+          curl -fL "$ASSET_URL" -o Python-3.13-iOS-support.tar.gz
+          tar -xzf Python-3.13-iOS-support.tar.gz -C py
+
+          XCF="$(find py -maxdepth 7 -name Python.xcframework -type d -print -quit)"
+          if [ -z "$XCF" ]; then
+            echo "Python.xcframework not found in support archive."
+            exit 1
+          fi
+          mv "$XCF" ./Python.xcframework
+          test -f Python.xcframework/Info.plist
+
+          ENCODINGS="$(find py -type f -path '*/encodings/__init__.py' ! -path '*/Python.xcframework/*' -print -quit)"
+          if [ -z "$ENCODINGS" ]; then
+            for CANDIDATE in \
+              "Python.xcframework/lib/python3.13/encodings/__init__.py" \
+              "Python.xcframework/ios-arm64/lib-arm64/python3.13/encodings/__init__.py" \
+              "Python.xcframework/ios-arm64/lib/python3.13/encodings/__init__.py"; do
+              if [ -f "$CANDIDATE" ]; then ENCODINGS="$CANDIDATE"; break; fi
+            done
+          fi
+          if [ -z "$ENCODINGS" ]; then
+            echo "Could not find device-compatible encodings/__init__.py."
+            find py Python.xcframework -type f -path '*/encodings/__init__.py' -print | head -30
+            exit 1
+          fi
+          STDLIB="${ENCODINGS%/encodings/__init__.py}"
+          mkdir -p python-stdlib/python3.13
+          rsync -a --exclude='lib-dynload/' "$STDLIB/" python-stdlib/python3.13/
+          test -f python-stdlib/python3.13/encodings/__init__.py
+
+          "$PYTHON_BIN" -m venv .build-venv
+          BUILD_PYTHON="$PWD/.build-venv/bin/python"
+          mkdir -p app_packages
+          "$BUILD_PYTHON" -m pip install --upgrade pip
+          "$BUILD_PYTHON" -m pip install -r requirements.txt \
+            --target app_packages \
+            --platform ios_13_0_arm64_iphoneos \
+            --implementation cp --python-version 3.13 --abi cp313 \
+            --only-binary=:all: \
+            --extra-index-url https://pypi.anaconda.org/beeware/simple
+          rm -rf app_packages/bin
+          test -f app_packages/numpy/__init__.py
+
+          export PYTHONDONTWRITEBYTECODE=1
+          export PYTHONPYCACHEPREFIX=/tmp/pyphone-pycache
+          rm -rf "$PYTHONPYCACHEPREFIX"
+          "$BUILD_PYTHON" -m pip install --only-binary=:all: "numpy==2.3.5"
+          "$BUILD_PYTHON" -m py_compile app/runner.py app/ui.py scripts/test_runtime.py scripts/test_contracts.py
+          "$BUILD_PYTHON" scripts/test_contracts.py
+          "$BUILD_PYTHON" scripts/test_runtime.py
+          test -f app_packages/numpy/__init__.py
+          find app_packages/numpy -type f -name '*.so' -print -quit | grep -q .
+          echo "Python runtime tests and NumPy package checks passed."
+
+      - name: Generate app icons and Xcode project
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s icon.png
+          mkdir -p sources/Assets.xcassets/AppIcon.appiconset
+          python3 - <<'PY'
+          import json, subprocess
+          from pathlib import Path
+
+          source = Path("icon.png")
+          root = Path("sources/Assets.xcassets")
+          iconset = root / "AppIcon.appiconset"
+          specs = [
+              ("iphone", "20x20", 2), ("iphone", "20x20", 3),
+              ("iphone", "29x29", 2), ("iphone", "29x29", 3),
+              ("iphone", "40x40", 2), ("iphone", "40x40", 3),
+              ("iphone", "60x60", 2), ("iphone", "60x60", 3),
+              ("ipad", "20x20", 1), ("ipad", "20x20", 2),
+              ("ipad", "29x29", 1), ("ipad", "29x29", 2),
+              ("ipad", "40x40", 1), ("ipad", "40x40", 2),
+              ("ipad", "76x76", 1), ("ipad", "76x76", 2),
+              ("ipad", "83.5x83.5", 2), ("ios-marketing", "1024x1024", 1),
+          ]
+          images = []
+          for idiom, size, scale in specs:
+              filename = ("AppIcon-marketing-1024.png" if idiom == "ios-marketing"
+                          else f"AppIcon-{idiom}-{size.replace('x','-')}@{scale}x.png")
+              pixels = round(float(size.split("x")[0]) * scale)
+              subprocess.run(["sips", "-z", str(pixels), str(pixels), str(source),
+                              "--out", str(iconset / filename)], check=True,
+                             stdout=subprocess.DEVNULL)
+              images.append({"filename": filename, "idiom": idiom,
+                             "scale": f"{scale}x", "size": size})
+          (root / "Contents.json").write_text(
+              json.dumps({"info": {"author": "xcode", "version": 1}}, indent=2) + "\n")
+          (iconset / "Contents.json").write_text(
+              json.dumps({"images": images, "info": {"author": "xcode", "version": 1}}, indent=2) + "\n")
+          print(f"Generated {len(images)} app icon sizes from icon.png")
+          PY
+          xcodegen generate
+
+      - name: Build app
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf build
+          set -o pipefail
+          xcodebuild \
+            -project PyPhone.xcodeproj \
+            -scheme PyPhone \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tee xcodebuild.log
+          test -d "build/Build/Products/Release-iphoneos/PyPhone.app"
+
+      - name: Package and verify IPA
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP_PATH="build/Build/Products/Release-iphoneos/PyPhone.app"
+          test -d "$APP_PATH"
+          test -f "$APP_PATH/Info.plist"
+          plutil -lint "$APP_PATH/Info.plist"
+          test -f "$APP_PATH/python/lib/python3.13/encodings/__init__.py"
+          test -f "$APP_PATH/python/lib/python3.13/datetime.py"
+          test -f "$APP_PATH/app_packages/numpy/__init__.py"
+          test -f "$APP_PATH/app_packages/numpy/_core/__init__.py"
+
+          for module in math _datetime; do
+            test -f "$APP_PATH/Frameworks/$module.framework/$module" || {
+              echo "Python native framework is missing: $module"
+              find "$APP_PATH/Frameworks" -maxdepth 1 \( -iname '*math*' -o -iname '*datetime*' \) -print
+              exit 1
+            }
+            find "$APP_PATH/python/lib/python3.13/lib-dynload" -maxdepth 1 -type f -name "$module*.fwork" -print -quit | grep -q .
+          done
+          find "$APP_PATH/app_packages/numpy" -type f -name '*.fwork' -print -quit | grep -q .
+
+          while IFS= read -r -d '' marker; do
+            target="$(cat "$marker")"
+            case "$target" in Frameworks/*.framework/*) ;; *) echo "Invalid framework target: $target"; exit 1 ;; esac
+            test -f "$APP_PATH/$target"
+            test -f "$APP_PATH/$target.origin"
+            origin="$(cat "$APP_PATH/$target.origin")"
+            test -f "$APP_PATH/$origin"
+          done < <(find "$APP_PATH/python/lib/python3.13/lib-dynload" "$APP_PATH/app_packages" -type f -name '*.fwork' -print0)
+
+          if find "$APP_PATH/python/lib/python3.13/lib-dynload" "$APP_PATH/app_packages" -type f -name '*.so' -print -quit | grep -q .; then
+            echo "A native .so module was left outside Frameworks."
+            exit 1
+          fi
+          find "$APP_PATH/Frameworks" -maxdepth 1 -name 'numpy*framework' -print | grep -q .
+
+          rm -rf Payload PyPhone.ipa PyPhone_ipa.zip
+          mkdir Payload
+          cp -R "$APP_PATH" Payload/
+          zip -qry PyPhone.ipa Payload
+          python3 - <<'PY'
+          import hashlib, zipfile
+          from pathlib import Path
+          ipa = Path("PyPhone.ipa")
+          archive = Path("PyPhone_ipa.zip")
+          original_hash = hashlib.sha256(ipa.read_bytes()).hexdigest()
+          with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_STORED) as zf:
+              zf.write(ipa, arcname="PyPhone.ipa")
+          with zipfile.ZipFile(archive, "r") as zf:
+              assert zf.namelist() == ["PyPhone.ipa"], zf.namelist()
+              assert zf.testzip() is None, "Outer ZIP CRC verification failed"
+              extracted = zf.read("PyPhone.ipa")
+          assert hashlib.sha256(extracted).hexdigest() == original_hash
+          print("Outer ZIP verified; embedded IPA matches byte-for-byte.")
+          PY
+          unzip -tq PyPhone.ipa
+          unzip -Z1 PyPhone.ipa | grep -Fxq "Payload/PyPhone.app/Info.plist"
+          unzip -tq PyPhone_ipa.zip
+          unzip -Z1 PyPhone_ipa.zip | grep -Fxq "PyPhone.ipa"
+          unzip -p PyPhone_ipa.zip PyPhone.ipa > "$RUNNER_TEMP/PyPhone_check.ipa"
+          unzip -tq "$RUNNER_TEMP/PyPhone_check.ipa"
+          unzip -Z1 "$RUNNER_TEMP/PyPhone_check.ipa" | grep -Fxq "Payload/PyPhone.app/Info.plist"
+          shasum -a 256 PyPhone.ipa PyPhone_ipa.zip > PyPhone_SHA256.txt
+          ls -lh PyPhone.ipa PyPhone_ipa.zip PyPhone_SHA256.txt
+
+      - name: Upload build artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: PyPhone-iOS-build
+          path: |
+            PyPhone_ipa.zip
+            PyPhone_SHA256.txt
+            xcodebuild.log
+          if-no-files-found: warn
+          retention-days: 14
