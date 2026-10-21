@@ -55,11 +55,11 @@ def main():
     incoming.mkdir(parents=True, exist_ok=True)
     wheel_path = incoming / "demo_pkg-1.0-py3-none-any.whl"
     with zipfile.ZipFile(wheel_path, "w") as wheel:
-        wheel.writestr("demo_pkg/__init__.py", "VALUE = 'installed from wheel'\\n")
+        wheel.writestr("demo_pkg/__init__.py", "VALUE = 'installed from wheel'\n")
         wheel.writestr("demo_pkg-1.0.dist-info/WHEEL",
-                       "Wheel-Version: 1.0\\nRoot-Is-Purelib: true\\nTag: py3-none-any\\n")
+                       "Wheel-Version: 1.0\nRoot-Is-Purelib: true\nTag: py3-none-any\n")
         wheel.writestr("demo_pkg-1.0.dist-info/METADATA",
-                       "Metadata-Version: 2.1\\nName: demo-pkg\\nVersion: 1.0\\n")
+                       "Metadata-Version: 2.1\nName: demo-pkg\nVersion: 1.0\n")
 
     import runner
 
