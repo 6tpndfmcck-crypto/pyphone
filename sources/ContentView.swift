@@ -236,7 +236,11 @@ struct WidgetView: View {
             ))
             .textFieldStyle(.roundedBorder)
         default:
-            Text(w.text).font(.title3)
+            Text(w.text)
+                .font(.system(size: 15, design: .monospaced))
+                .lineSpacing(2)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }
