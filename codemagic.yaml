@@ -22,9 +22,10 @@ workflows:
           set -euo pipefail
           brew install xcodegen python@3.13
 
-      - name: get python and numpy
+      - name: Prepare Python, test runtime, generate icon, and configure Xcode
         script: |
           set -euo pipefail
+
 
           PYTHON_BIN="$(brew --prefix python@3.13)/bin/python3.13"
           "$PYTHON_BIN" --version
@@ -93,9 +94,6 @@ workflows:
           echo "NumPy installed:"
           ls app_packages | head -30
 
-      - name: test Python source and runner
-        script: |
-          set -euo pipefail
           BUILD_PYTHON="$PWD/.build-venv/bin/python"
           export PYTHONDONTWRITEBYTECODE=1
           export PYTHONPYCACHEPREFIX=/tmp/pyphone-pycache
@@ -110,9 +108,6 @@ workflows:
           find app_packages/numpy -type f -name '*.so' -print -quit | grep -q .
           echo "Python source, runner, UI callbacks, and NumPy package checks passed."
 
-      - name: Create iOS app icon from icon.png
-        script: |
-          set -euo pipefail
           test -s icon.png
           mkdir -p sources/Assets.xcassets/AppIcon.appiconset
           python3 - <<'PY'
@@ -148,11 +143,7 @@ workflows:
           print(f"Generated {len(images)} app icon sizes from icon.png")
           PY
 
-      - name: make Xcode 
-        script: |
-          set -euo pipefail
           xcodegen generate
-
       - name: make IPA
         script: |
           set -euo pipefail
