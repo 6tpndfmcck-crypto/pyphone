@@ -238,7 +238,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: PyPhone-IPA-download
+          name: pyphone
           path: artifacts/
           if-no-files-found: error
           retention-days: 14
