@@ -6,6 +6,9 @@ iOS-only NumPy binary is checked separately during packaging and at app startup.
 """
 import datetime
 import json
+import os
+import tempfile
+import zipfile
 import math
 import sys
 import threading
@@ -45,7 +48,27 @@ def main():
     label.set("after")
     assert label.get() == "after", "UI label setter did not update its value"
 
+    # Simulate a wheel dropped into the Files-visible Packages folder.
+    package_docs = tempfile.mkdtemp(prefix="pyphone-package-test-")
+    os.environ["PYPHONE_DOCUMENTS"] = package_docs
+    incoming = Path(package_docs) / "Packages"
+    incoming.mkdir(parents=True, exist_ok=True)
+    wheel_path = incoming / "demo_pkg-1.0-py3-none-any.whl"
+    with zipfile.ZipFile(wheel_path, "w") as wheel:
+        wheel.writestr("demo_pkg/__init__.py", "VALUE = 'installed from wheel'\\n")
+        wheel.writestr("demo_pkg-1.0.dist-info/WHEEL",
+                       "Wheel-Version: 1.0\\nRoot-Is-Purelib: true\\nTag: py3-none-any\\n")
+        wheel.writestr("demo_pkg-1.0.dist-info/METADATA",
+                       "Metadata-Version: 2.1\\nName: demo-pkg\\nVersion: 1.0\\n")
+
     import runner
+
+    import demo_pkg
+    assert demo_pkg.VALUE == "installed from wheel", "Dropped wheel wasn't importable"
+    assert not wheel_path.exists(), "Successfully installed wheel wasn't moved out of Packages"
+    assert (Path(package_docs) / "Installed" / wheel_path.name).exists(), (
+        "Installed wheel wasn't archived"
+    )
 
     runtime_status = runner.check_runtime()
     assert runtime_status.startswith("Python ready · NumPy "), (
