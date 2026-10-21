@@ -215,14 +215,30 @@ jobs:
           shasum -a 256 PyPhone.ipa PyPhone_ipa.zip > PyPhone_SHA256.txt
           ls -lh PyPhone.ipa PyPhone_ipa.zip PyPhone_SHA256.txt
 
-      - name: Upload build artifacts
+      - name: Stage and verify downloadable files
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          find . -maxdepth 5 -type f \\( -name 'PyPhone_ipa.zip' -o -name 'PyPhone.ipa' -o -name 'PyPhone_SHA256.txt' -o -name 'xcodebuild.log' \\) -not -path './artifacts/*' -print
+          for file in PyPhone_ipa.zip PyPhone_SHA256.txt xcodebuild.log; do
+            if [ -f "$file" ]; then cp "$file" artifacts/; fi
+          done
+          echo "Files staged for upload:"
+          ls -lah artifacts
+          if [ ! -s artifacts/PyPhone_ipa.zip ]; then
+            echo "ERROR: PyPhone_ipa.zip was not created; the build/package step did not produce the expected download."
+            exit 1
+          fi
+          unzip -tq artifacts/PyPhone_ipa.zip
+          unzip -Z1 artifacts/PyPhone_ipa.zip | grep -Fxq "PyPhone.ipa"
+
+      - name: Upload PyPhone IPA artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: PyPhone-iOS-build
-          path: |
-            PyPhone_ipa.zip
-            PyPhone_SHA256.txt
-            xcodebuild.log
-          if-no-files-found: warn
+          name: PyPhone-IPA-download
+          path: artifacts/
+          if-no-files-found: error
           retention-days: 14
