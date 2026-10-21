@@ -221,7 +221,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts
-          find . -maxdepth 5 -type f \\( -name 'PyPhone_ipa.zip' -o -name 'PyPhone.ipa' -o -name 'PyPhone_SHA256.txt' -o -name 'xcodebuild.log' \\) -not -path './artifacts/*' -print
+          find . -maxdepth 5 -type f \( -name 'PyPhone_ipa.zip' -o -name 'PyPhone.ipa' -o -name 'PyPhone_SHA256.txt' -o -name 'xcodebuild.log' \) -not -path './artifacts/*' -print
           for file in PyPhone_ipa.zip PyPhone_SHA256.txt xcodebuild.log; do
             if [ -f "$file" ]; then cp "$file" artifacts/; fi
           done
