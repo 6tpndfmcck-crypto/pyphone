@@ -24,7 +24,8 @@ jobs:
       - name: Install build tools
         run: |
           set -euo pipefail
-          brew install xcodegen python@3.13
+          brew install xcodegen
+          brew install python@3.13 || brew link --overwrite python@3.13
 
       - name: Prepare Python runtime and NumPy
         shell: bash
