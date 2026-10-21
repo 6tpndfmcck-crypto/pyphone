@@ -1,4 +1,5 @@
-import sys, json, traceback, threading, builtins
+import sys, json, traceback, threading, builtins, os, shutil, tempfile, zipfile
+from pathlib import Path
 
 # Load datetime on the interpreter's main thread before user code or native
 # packages (such as NumPy) request its C API from a worker thread.
@@ -22,6 +23,128 @@ class _Out:
 _out = _Out()
 sys.stdout = _out
 sys.stderr = _out
+
+
+# User-added pure-Python wheels live in the app's shared Documents folder.
+# Binary/native wheels are rejected because iOS needs their extensions built
+# and packaged as frameworks; ordinary PyPI wheels cannot safely do that here.
+def _package_folders():
+    documents = os.environ.get("PYPHONE_DOCUMENTS")
+    if not documents:
+        documents = os.path.join(os.path.expanduser("~"), "Documents")
+    root = Path(documents)
+    incoming = root / "Packages"
+    archived = root / "Installed"
+    installed = root / "InstalledPackages"
+    for folder in (incoming, archived, installed):
+        folder.mkdir(parents=True, exist_ok=True)
+    return incoming, archived, installed
+
+
+def _wheel_install_target(filename):
+    if not filename.lower().endswith(".whl"):
+        raise ValueError("Only .whl package files are supported.")
+    fields = filename[:-4].split("-")
+    if len(fields) < 5:
+        raise ValueError("This doesn't look like a valid wheel filename.")
+    python_tags, abi_tags, platform_tags = fields[-3:]
+    supported_python = {"py3", "py" + str(sys.version_info.major) + str(sys.version_info.minor)}
+    if not (set(python_tags.split(".")) & supported_python):
+        raise ValueError("Wheel is for a different Python version.")
+    if abi_tags != "none" or platform_tags != "any":
+        raise ValueError("Only pure-Python wheels (none-any) are supported.")
+    target_name = "-".join(fields[:-3])
+    safe_name = "".join(c if c.isalnum() or c in "._-" else "_" for c in target_name)
+    return safe_name or "package"
+
+
+def _install_wheel(wheel_path, installed_root):
+    target_name = _wheel_install_target(wheel_path.name)
+    target = installed_root / target_name
+    if target.exists():
+        print("Package already installed; not reinstalling:", wheel_path.name)
+        return False
+
+    with zipfile.ZipFile(wheel_path, "r") as archive:
+        bad = archive.testzip()
+        if bad:
+            raise ValueError("The wheel archive is damaged.")
+        entries = archive.infolist()
+        if sum(entry.file_size for entry in entries) > 50 * 1024 * 1024:
+            raise ValueError("Package expands beyond the 50 MB safety limit.")
+        # Reject native extensions and unsafe paths before writing anything.
+        for entry in entries:
+            path = Path(entry.filename)
+            if path.is_absolute() or ".." in path.parts:
+                raise ValueError("Package contains an unsafe file path.")
+            suffix = path.suffix.lower()
+            if suffix in {".so", ".dylib", ".dll", ".pyd", ".fwork"} or suffix == ".framework":
+                raise ValueError("This wheel contains native code and isn't installable on iOS this way.")
+        if not any(name.endswith(".dist-info/WHEEL") for name in archive.namelist()):
+            raise ValueError("The ZIP doesn't contain wheel metadata.")
+
+        installed_root.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix="pyphone-wheel-", dir=str(installed_root)) as temp:
+            staging = Path(temp) / "package"
+            staging.mkdir()
+            for entry in entries:
+                if entry.is_dir():
+                    continue
+                parts = Path(entry.filename).parts
+                # Wheel data files are placed according to the wheel spec.
+                # purelib/platlib/data are importable or runtime data; scripts
+                # are intentionally skipped because PyPhone has no shell.
+                if parts and parts[0].endswith(".data"):
+                    if len(parts) < 3:
+                        continue
+                    category = parts[1]
+                    if category == "scripts":
+                        continue
+                    if category not in {"purelib", "platlib", "data"}:
+                        continue
+                    relative = Path(*parts[2:])
+                else:
+                    relative = Path(*parts)
+                destination = staging / relative
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                with archive.open(entry, "r") as src, open(destination, "wb") as dst:
+                    shutil.copyfileobj(src, dst)
+            os.replace(str(staging), str(target))
+    return True
+
+
+def _process_dropped_packages():
+    incoming, archived, installed = _package_folders()
+    # Existing installs must be on sys.path before user code is executed.
+    for folder in sorted(installed.iterdir()):
+        if folder.is_dir() and not folder.name.startswith("."):
+            sys.path.insert(0, str(folder))
+
+    try:
+        dropped = sorted(p for p in incoming.iterdir() if p.is_file() and p.suffix.lower() == ".whl")
+    except OSError as exc:
+        print("Package folder couldn't be read:", exc)
+        return
+    for wheel in dropped:
+        try:
+            did_install = _install_wheel(wheel, installed)
+            # Archive successful installs and duplicates so they aren't retried
+            # on every launch. Failed wheels remain in Packages for inspection.
+            destination = archived / wheel.name
+            if destination.exists():
+                destination = archived / (wheel.stem + "-copy" + wheel.suffix)
+            shutil.move(str(wheel), str(destination))
+            if did_install:
+                install_folder = installed / _wheel_install_target(destination.name)
+                if install_folder.is_dir():
+                    sys.path.insert(0, str(install_folder))
+                print("Installed package:", destination.name)
+        except Exception as exc:
+            print("Couldn't install", wheel.name + ":", str(exc))
+            print("The file was left in Packages so you can fix or remove it.")
+
+
+_process_dropped_packages()
 
 import ui
 
