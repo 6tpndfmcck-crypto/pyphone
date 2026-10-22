@@ -25,19 +25,30 @@ sys.stdout = _out
 sys.stderr = _out
 
 
-# User-added pure-Python wheels live in the app's shared Documents folder.
+# User files and pure-Python wheels live in the app's shared Documents folder.
 # Binary/native wheels are rejected because iOS needs their extensions built
 # and packaged as frameworks; ordinary PyPI wheels cannot safely do that here.
-def _package_folders():
+def _documents_root():
     documents = os.environ.get("PYPHONE_DOCUMENTS")
     if not documents:
         documents = os.path.join(os.path.expanduser("~"), "Documents")
-    root = Path(documents)
+    return Path(documents)
+
+
+def _files_folder():
+    folder = _documents_root() / "Files"
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder
+
+
+def _package_folders():
+    root = _documents_root()
     incoming = root / "Packages"
     archived = root / "Installed"
     installed = root / "InstalledPackages"
     for folder in (incoming, archived, installed):
         folder.mkdir(parents=True, exist_ok=True)
+    _files_folder()
     return incoming, archived, installed
 
 
@@ -195,6 +206,9 @@ def _worker(code, started):
         _run_tid[0] = threading.get_ident()
     started.set()
     try:
+        # Make relative file paths use Documents/Files, which is writable
+        # inside PyPhone's iOS container.
+        os.chdir(_files_folder())
         exec(compile(code, "<code>", "exec"), {"__name__": "__main__"})
     except KeyboardInterrupt:
         print("Stopped.")
