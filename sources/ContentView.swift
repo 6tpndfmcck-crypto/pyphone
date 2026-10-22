@@ -229,6 +229,20 @@ struct WidgetView: View {
         case "button":
             Button(w.text) { runner.tap(w.id) }
                 .buttonStyle(.borderedProminent)
+        case "image":
+            if let encoded = w.image_data,
+               let data = Data(base64Encoded: encoded),
+               let uiImage = UIImage(data: data) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .interpolation(.none)
+                    .scaledToFit()
+                    .frame(maxWidth: 380, maxHeight: 620)
+                    .frame(maxWidth: .infinity)
+            } else {
+                Text("Couldn't load image: " + w.text)
+                    .foregroundStyle(.secondary)
+            }
         case "entry":
             TextField(w.placeholder, text: Binding(
                 get: { w.text },
