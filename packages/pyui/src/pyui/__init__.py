@@ -62,6 +62,8 @@ class Widget:
         self._on_click = on_click
         self.image_data = image_data
         self._native_widget = None
+        self._tk_widget = None
+        self._image_source = None
         _widgets.append(self)
         _sequence += 1
 
@@ -69,6 +71,7 @@ class Widget:
         global _sequence
         if self.kind == "image":
             self.image_data = _image_data(value)
+            self._image_source = value
             self._text = str(value) if isinstance(value, (str, Path)) else "<image object>"
             if self._native_widget is not None:
                 self._native_widget.set(value)
@@ -116,7 +119,9 @@ def image(source):
     """Create an image widget from a path or a save()-compatible image object."""
     data = _image_data(source)
     text = str(source) if isinstance(source, (str, Path)) else "<image object>"
-    return _make("image", text, image_data=data)
+    widget = _make("image", text, image_data=data)
+    widget._image_source = source
+    return widget
 
 
 def clear():
@@ -169,13 +174,8 @@ def show(title="pyUI", backend="auto"):
             elif widget.kind == "entry":
                 widget._native_widget = native.entry(widget.placeholder, widget._text)
             elif widget.kind == "image":
-                # Pass the encoded PNG to native backends as a data URI when
-                # the original source was an image object; paths are passed as-is.
-                source = widget._text if not widget._text.startswith("<") else None
-                if source is not None:
-                    widget._native_widget = native.image(source)
-                else:
-                    widget._native_widget = native.image("data:image/png;base64," + widget.image_data)
+                # PyPhone's renderer accepts either a path or a HeliOS-like image.
+                widget._native_widget = native.image(widget._image_source)
         return None
     if backend == "pyphone":
         raise RuntimeError("PyPhone's native UI renderer is not available in this Python runtime.")
