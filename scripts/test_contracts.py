@@ -22,7 +22,7 @@ content_swift = read("sources/ContentView.swift")
 bridge_h = read("sources/PythonBridge.h")
 bridge_m = read("sources/PythonBridge.m")
 project = read("project.yml")
-codemagic = read("codemagic.yaml")
+workflow = read(".github/workflows/build.yml")
 requirements = read("requirements.txt")
 
 # Swift can only invoke functions that the embedded Python runner actually has.
@@ -74,12 +74,14 @@ require("- sources" in project and "path: app" in project and "path: app_package
         "XcodeGen project must include sources, app, and app_packages")
 require("Python.xcframework" in project and "scripts/install_python.sh" in project,
         "XcodeGen project must link Python.xcframework and run the Python installer")
-require("Python.xcframework" in codemagic and "requirements.txt" in codemagic and
-        "python-stdlib/python3.13" in codemagic and "app_packages" in codemagic,
-        "Codemagic staging does not provide all runtime resources")
-require("--python-version 3.13" in codemagic and "--abi cp313" in codemagic and
-        "--platform ios_13_0_arm64_iphoneos" in codemagic,
-        "Codemagic NumPy wheel target does not match the Python/iOS runtime")
+require("Python.xcframework" in workflow and "requirements.txt" in workflow and
+        "python-stdlib/python3.13" in workflow and "app_packages" in workflow,
+        "GitHub Actions staging does not provide all runtime resources")
+require("--python-version 3.13" in workflow and "--abi cp313" in workflow and
+        "--platform ios_13_0_arm64_iphoneos" in workflow,
+        "GitHub Actions NumPy wheel target does not match the Python/iOS runtime")
+require("scripts/test_contracts.py" in workflow and "scripts/test_runtime.py" in workflow,
+        "GitHub Actions must run the Python contract and runtime checks")
 require("numpy==2.5.2.post1" in requirements.splitlines(),
         "iOS NumPy dependency must remain pinned to the tested BeeWare wheel")
 require("pip==25.2" in requirements.splitlines(),
