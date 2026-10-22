@@ -6,6 +6,7 @@ struct Widget: Identifiable, Decodable {
     let kind: String
     var text: String
     let placeholder: String
+    let image_data: String?
 }
 
 struct PyState: Decodable {
