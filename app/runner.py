@@ -1,4 +1,4 @@
-import sys, json, traceback, threading, builtins, os, shutil, tempfile, zipfile, urllib.request, urllib.parse, shlex, ssl
+import sys, json, traceback, threading, builtins, os, shutil, tempfile, zipfile, urllib.request, urllib.parse, shlex, ssl, difflib
 from pathlib import Path
 
 # Load datetime on the interpreter's main thread before user code or native
@@ -332,12 +332,24 @@ _ERROR_HELP = {
 
 
 def _show_friendly_error(exc, tb=None):
-    """Show a short explanation and likely fix instead of a full traceback."""
+    """Show a concise, colorized explanation and a practical next step."""
+    # Colorama is already bundled/installed in PyPhone. Keep a plain-text
+    # fallback so error reporting still works if it ever becomes unavailable.
+    try:
+        from colorama import Fore, Style
+        red = Fore.RED
+        yellow = Fore.YELLOW
+        green = Fore.GREEN
+        cyan = Fore.CYAN
+        reset = Style.RESET_ALL
+    except Exception:
+        red = yellow = green = cyan = reset = ""
+
     kind = type(exc).__name__
     explanation, fix = _ERROR_HELP.get(
         kind,
         ("Your code stopped because Python raised an error.",
-         "Check the error message below and the line where it happened. If you're stuck, share this message for help.")
+         "Check the error message and the line where it happened. If you're stuck, share this message for help.")
     )
 
     line = getattr(exc, "lineno", None) if isinstance(exc, SyntaxError) else None
@@ -352,18 +364,31 @@ def _show_friendly_error(exc, tb=None):
         except Exception:
             pass
 
-    print("\n--- PyPhone Error ---")
-    print("Problem:", explanation)
-    if line:
-        print("Line:", line)
-        if source:
-            print("Code:", source.strip())
-    detail = str(exc).strip()
-    if detail:
-        print("Error:", kind + (": " + detail if detail != kind else ""))
-    print("Try this:", fix)
-    print("---------------------")
+    # Make common misspelled variable errors more actionable.
+    if kind == "NameError":
+        import re
+        match = re.search(r"name ['\\"]([^'\\"]+)['\\"] is not defined", str(exc))
+        if match and source:
+            missing = match.group(1)
+            candidates = re.findall(r"\b[A-Za-z_]\w*\b", source)
+            close = difflib.get_close_matches(missing, candidates, n=1, cutoff=0.65)
+            if close:
+                fix = "Did you mean '" + close[0] + "'? Check the spelling of that variable."
 
+    print()
+    print(red + Style.BRIGHT + "ERROR" + reset + red + "  " + kind + reset)
+    print(yellow + "WHAT HAPPENED" + reset)
+    print(explanation)
+    if line:
+        print(cyan + "LINE " + str(line) + reset)
+        if source:
+            print(red + "  " + source.strip() + reset)
+    detail = str(exc).strip()
+    if detail and detail != kind:
+        print(yellow + "DETAIL " + reset + detail)
+    print(green + "HOW TO FIX IT" + reset)
+    print(fix)
+    print()
 
 def _worker(code, started):
     with _run_lock:
