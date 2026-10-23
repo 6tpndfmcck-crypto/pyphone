@@ -1,4 +1,4 @@
-import sys, json, traceback, threading, builtins, os, shutil, tempfile, zipfile
+import sys, json, traceback, threading, builtins, os, shutil, tempfile, zipfile, urllib.request, urllib.parse, shlex
 from pathlib import Path
 
 # Load datetime on the interpreter's main thread before user code or native
@@ -124,6 +124,65 @@ def _install_wheel(wheel_path, installed_root):
     return True
 
 
+def _pip_install_command(code):
+    """Handle a standalone 'pip install ...' line in the editor without a shell."""
+    stripped = code.strip()
+    if "\\n" in stripped or not stripped.startswith("pip install "):
+        return False
+
+    try:
+        parts = shlex.split(stripped)
+        if len(parts) != 3 or parts[0:2] != ["pip", "install"]:
+            print("Usage: pip install package==version")
+            return True
+
+        spec = parts[2]
+        if "==" in spec:
+            package_name, version = spec.split("==", 1)
+            if not package_name or not version:
+                raise ValueError("Use package==version, for example pyui-toolkit==0.1.0")
+            endpoint = "https://pypi.org/pypi/" + urllib.parse.quote(package_name, safe="") + "/" + urllib.parse.quote(version, safe="") + "/json"
+        else:
+            package_name = spec
+            endpoint = "https://pypi.org/pypi/" + urllib.parse.quote(package_name, safe="") + "/json"
+
+        print("Looking up", spec, "on PyPI...")
+        request = urllib.request.Request(endpoint, headers={"User-Agent": "PyPhone-package-installer/1.0"})
+        with urllib.request.urlopen(request, timeout=20) as response:
+            metadata = json.loads(response.read().decode("utf-8"))
+
+        files = metadata.get("urls", [])
+        wheel = next((item for item in files
+                      if item.get("filename", "").endswith(".whl")
+                      and item.get("filename", "").endswith("none-any.whl")
+                      and item.get("filename", "").split("-")[-3] in ("py3", "py2.py3", "py2.py3.py3")), None)
+        if wheel is None:
+            raise ValueError("PyPI has no compatible pure-Python wheel for this package. Native-code wheels and source builds aren't supported.")
+
+        incoming, archived, installed = _package_folders()
+        wheel_path = incoming / wheel["filename"]
+        print("Downloading", wheel["filename"], "...")
+        request = urllib.request.Request(wheel["url"], headers={"User-Agent": "PyPhone-package-installer/1.0"})
+        with urllib.request.urlopen(request, timeout=45) as response, open(wheel_path, "wb") as output:
+            shutil.copyfileobj(response, output)
+
+        did_install = _install_wheel(wheel_path, installed)
+        archive_path = archived / wheel_path.name
+        if archive_path.exists():
+            archive_path = archived / (wheel_path.stem + "-copy" + wheel_path.suffix)
+        shutil.move(str(wheel_path), str(archive_path))
+        if did_install:
+            install_folder = installed / _wheel_install_target(archive_path.name)
+            sys.path.insert(0, str(install_folder))
+            print("Successfully installed", metadata.get("info", {}).get("name", package_name), metadata.get("info", {}).get("version", version if "version" in locals() else ""))
+        else:
+            print("Package is already installed.")
+        print("Note: this installs one pure-Python package only; dependencies must be installed separately.")
+    except Exception as exc:
+        print("pip install failed:", str(exc))
+    return True
+
+
 def _process_dropped_packages():
     incoming, archived, installed = _package_folders()
     # Existing installs must be on sys.path before user code is executed.
@@ -209,7 +268,8 @@ def _worker(code, started):
         # Make relative file paths use Documents/Files, which is writable
         # inside PyPhone's iOS container.
         os.chdir(_files_folder())
-        exec(compile(code, "<code>", "exec"), {"__name__": "__main__"})
+        if not _pip_install_command(code):
+            exec(compile(code, "<code>", "exec"), {"__name__": "__main__"})
     except KeyboardInterrupt:
         print("Stopped.")
     except BaseException:
