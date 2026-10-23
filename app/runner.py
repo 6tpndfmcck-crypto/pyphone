@@ -1,9 +1,12 @@
-import sys, json, traceback, threading, builtins, os, shutil, tempfile, zipfile, urllib.request, urllib.parse, shlex
+import sys, json, traceback, threading, builtins, os, shutil, tempfile, zipfile, urllib.request, urllib.parse, shlex, ssl
 from pathlib import Path
 
 # Load datetime on the interpreter's main thread before user code or native
 # packages (such as NumPy) request its C API from a worker thread.
 import datetime
+import certifi
+
+_PYPI_SSL_CONTEXT = ssl.create_default_context(cafile=certifi.where())
 
 
 class _Out:
@@ -148,7 +151,7 @@ def _pip_install_command(code):
 
         print("Looking up", spec, "on PyPI...")
         request = urllib.request.Request(endpoint, headers={"User-Agent": "PyPhone-package-installer/1.0"})
-        with urllib.request.urlopen(request, timeout=20) as response:
+        with urllib.request.urlopen(request, timeout=20, context=_PYPI_SSL_CONTEXT) as response:
             metadata = json.loads(response.read().decode("utf-8"))
 
         files = metadata.get("urls", [])
@@ -163,7 +166,7 @@ def _pip_install_command(code):
         wheel_path = incoming / wheel["filename"]
         print("Downloading", wheel["filename"], "...")
         request = urllib.request.Request(wheel["url"], headers={"User-Agent": "PyPhone-package-installer/1.0"})
-        with urllib.request.urlopen(request, timeout=45) as response, open(wheel_path, "wb") as output:
+        with urllib.request.urlopen(request, timeout=45, context=_PYPI_SSL_CONTEXT) as response, open(wheel_path, "wb") as output:
             shutil.copyfileobj(response, output)
 
         did_install = _install_wheel(wheel_path, installed)
