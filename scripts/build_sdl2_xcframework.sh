@@ -30,10 +30,12 @@ xcodebuild \
   -derivedDataPath "$DERIVED" \
   build
 
-BUILT="$(find "$SOURCE/Xcode/SDL/build" "$ROOT/build" "$DERIVED/Build/Products" -type d -name SDL2.xcframework -print -quit 2>/dev/null || true)"
+# SDL's xcFramework scheme writes its final product into Xcode/SDL/Products,
+# not DerivedData/Build/Products. Search that exact location first.
+BUILT="$(find "$SOURCE/Xcode/SDL/Products" "$SOURCE/Xcode/SDL/build" "$ROOT/build" "$DERIVED/Build/Products" -type d -name SDL2.xcframework -print -quit 2>/dev/null || true)"
 if [ -z "$BUILT" ]; then
-  echo "error: xcodebuild succeeded but SDL2.xcframework was not found under $DERIVED/Build/Products" >&2
-  find "$SOURCE/Xcode/SDL/build" "$ROOT/build" "$DERIVED/Build/Products" -maxdepth 5 -print 2>/dev/null | head -100 >&2 || true
+  echo "error: xcodebuild succeeded but SDL2.xcframework was not found in expected output locations" >&2
+  find "$SOURCE/Xcode/SDL/Products" "$SOURCE/Xcode/SDL/build" "$ROOT/build" "$DERIVED/Build/Products" -maxdepth 6 -print 2>/dev/null | head -120 >&2 || true
   exit 1
 fi
 
