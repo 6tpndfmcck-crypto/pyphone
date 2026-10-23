@@ -352,7 +352,7 @@ def _show_friendly_error(exc, tb=None):
         except Exception:
             pass
 
-    print("\\n--- PyPhone Error ---")
+    print("\n--- PyPhone Error ---")
     print("Problem:", explanation)
     if line:
         print("Line:", line)
