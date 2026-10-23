@@ -30,10 +30,10 @@ xcodebuild \
   -derivedDataPath "$DERIVED" \
   build
 
-BUILT="$(find "$DERIVED/Build/Products" -type d -name SDL2.xcframework -print -quit)"
+BUILT="$(find "$SOURCE/Xcode/SDL/build" "$ROOT/build" "$DERIVED/Build/Products" -type d -name SDL2.xcframework -print -quit 2>/dev/null || true)"
 if [ -z "$BUILT" ]; then
   echo "error: xcodebuild succeeded but SDL2.xcframework was not found under $DERIVED/Build/Products" >&2
-  find "$DERIVED/Build/Products" -maxdepth 5 -print 2>/dev/null | head -100 >&2 || true
+  find "$SOURCE/Xcode/SDL/build" "$ROOT/build" "$DERIVED/Build/Products" -maxdepth 5 -print 2>/dev/null | head -100 >&2 || true
   exit 1
 fi
 
