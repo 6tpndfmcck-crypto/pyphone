@@ -4,9 +4,16 @@ from pathlib import Path
 # Load datetime on the interpreter's main thread before user code or native
 # packages (such as NumPy) request its C API from a worker thread.
 import datetime
-import certifi
+try:
+    import certifi
+except ImportError:
+    # Host-side smoke tests run before bundled iOS packages are on sys.path.
+    certifi = None
 
-_PYPI_SSL_CONTEXT = ssl.create_default_context(cafile=certifi.where())
+_PYPI_SSL_CONTEXT = (
+    ssl.create_default_context(cafile=certifi.where())
+    if certifi is not None else ssl.create_default_context()
+)
 
 
 class _Out:
