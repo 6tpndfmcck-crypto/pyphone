@@ -21,6 +21,15 @@ jobs:
       - name: Check out main
         uses: actions/checkout@v4
 
+      - name: Build SDL2 framework for the IPA
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/build_sdl2_xcframework.sh
+          test -f SDL2.xcframework/Info.plist
+          plutil -lint SDL2.xcframework/Info.plist
+          echo "SDL2.xcframework is ready to be embedded in PyPhone.app"
+
       - name: Install build tools
         run: |
           set -euo pipefail
@@ -157,6 +166,11 @@ jobs:
           test -d "$APP_PATH"
           test -f "$APP_PATH/Info.plist"
           plutil -lint "$APP_PATH/Info.plist"
+          test -f "$APP_PATH/Frameworks/SDL2.framework/SDL2" || {
+            echo "SDL2.framework was not embedded in PyPhone.app"
+            find "$APP_PATH/Frameworks" -maxdepth 2 -iname '*sdl*' -print
+            exit 1
+          }
           test -f "$APP_PATH/python/lib/python3.13/encodings/__init__.py"
           test -f "$APP_PATH/python/lib/python3.13/datetime.py"
           test -f "$APP_PATH/app_packages/numpy/__init__.py"
