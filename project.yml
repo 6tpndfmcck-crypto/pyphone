@@ -17,13 +17,16 @@ targets:
       - framework: Python.xcframework
         embed: true
         codeSign: true
+      - framework: SDL2.xcframework
+        embed: true
+        codeSign: true
     info:
       path: sources/Info.plist
       properties:
         CFBundleDisplayName: PyPhone
         UILaunchScreen: {}
         UIFileSharingEnabled: true
-        LSSupportsOpeningDocumentsInPlace: true
+        LSSupportsOpeningInPlace: true
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationLandscapeLeft

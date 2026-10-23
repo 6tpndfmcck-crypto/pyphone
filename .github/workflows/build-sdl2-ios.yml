@@ -1,0 +1,42 @@
+name: Build SDL2 iOS framework
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feat/sdl2-ios-bundling
+    paths:
+      - ".github/workflows/build-sdl2-ios.yml"
+      - "scripts/build_sdl2_xcframework.sh"
+
+permissions:
+  contents: read
+
+jobs:
+  build-sdl2:
+    runs-on: macos-14
+    timeout-minutes: 45
+    steps:
+      - name: Check out PyPhone
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer || sudo xcode-select -p
+          xcodebuild -version
+
+      - name: Build SDL2 XCFramework
+        run: bash scripts/build_sdl2_xcframework.sh
+
+      - name: Inspect framework slices
+        run: |
+          plutil -p SDL2.xcframework/Info.plist
+          find SDL2.xcframework -maxdepth 3 -type f | head -100
+
+      - name: Upload SDL2 XCFramework
+        uses: actions/upload-artifact@v4
+        with:
+          name: SDL2-ios-xcframework
+          path: SDL2.xcframework
+          if-no-files-found: error
+          retention-days: 14
