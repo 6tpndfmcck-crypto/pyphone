@@ -94,6 +94,15 @@ static NSString *exceptionText(void) {
         setenv("PYPHONE_DOCUMENTS", documents.UTF8String, 1);
     }
 
+    // PySDL2 uses PYSDL2_DLL_PATH to locate its native SDL2 library.
+    // The SDL2 XCFramework is embedded as SDL2.framework in the app's
+    // Frameworks directory; set this before CPython imports user packages.
+    NSURL *frameworks = NSBundle.mainBundle.privateFrameworksURL;
+    NSString *sdl2Dir = [frameworks URLByAppendingPathComponent:@"SDL2.framework" isDirectory:YES].path;
+    if ([fm fileExistsAtPath:[sdl2Dir stringByAppendingPathComponent:@"SDL2"]]) {
+        setenv("PYSDL2_DLL_PATH", sdl2Dir.UTF8String, 1);
+    }
+
     PyStatus status;
     PyPreConfig pre;
     PyPreConfig_InitIsolatedConfig(&pre);
