@@ -367,7 +367,7 @@ def _show_friendly_error(exc, tb=None):
     # Make common misspelled variable errors more actionable.
     if kind == "NameError":
         import re
-        match = re.search(r"name ['\\"]([^'\\"]+)['\\"] is not defined", str(exc))
+        match = re.search(r"name ['\"]([^'\"]+)['\"] is not defined", str(exc))
         if match and source:
             missing = match.group(1)
             candidates = re.findall(r"\b[A-Za-z_]\w*\b", source)
