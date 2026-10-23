@@ -270,6 +270,101 @@ def check_runtime(_=""):
     return "Python ready · NumPy " + str(numpy.__version__)
 
 
+
+_ERROR_HELP = {
+    "ModuleNotFoundError": (
+        "Python couldn't find a package you're importing.",
+        "Install the missing package with `pip install package-name` if it supports PyPhone, or check the import name."
+    ),
+    "ImportError": (
+        "Python found a package, but couldn't import something from it.",
+        "Check the package's documentation and make sure the name you're importing exists."
+    ),
+    "NameError": (
+        "Your code used a name Python doesn't recognize.",
+        "Check for a typo, or make sure the variable or function is created before you use it."
+    ),
+    "TypeError": (
+        "An operation received the wrong kind of value.",
+        "Check the values you're passing in and whether the function expects different types or arguments."
+    ),
+    "ValueError": (
+        "A value has the right general type, but isn't valid for this operation.",
+        "Check the value and use one that the operation accepts."
+    ),
+    "IndexError": (
+        "Your code tried to access a list position that doesn't exist.",
+        "Check the list length and make sure the index is between 0 and len(list) - 1."
+    ),
+    "KeyError": (
+        "Your code asked a dictionary for a key that isn't there.",
+        "Check the spelling of the key, or use dict.get(key) if the key might be missing."
+    ),
+    "AttributeError": (
+        "An object doesn't have the property or method your code tried to use.",
+        "Check the spelling and make sure this object supports that method or property."
+    ),
+    "IndentationError": (
+        "Python found indentation that doesn't fit the surrounding code.",
+        "Align the line with the correct code block and use consistent spaces."
+    ),
+    "TabError": (
+        "Your code mixes tabs and spaces for indentation.",
+        "Replace the indentation with consistent spaces."
+    ),
+    "ZeroDivisionError": (
+        "Your code tried to divide by zero.",
+        "Check the divisor before dividing and handle the case where it is 0."
+    ),
+    "FileNotFoundError": (
+        "Python couldn't find the file you asked it to open.",
+        "Check the filename and put the file in PyPhone's Documents/Files folder, or use the correct path."
+    ),
+    "PermissionError": (
+        "Python doesn't have permission to access that file or folder.",
+        "Use a location inside PyPhone's Documents/Files folder and check the file's permissions."
+    ),
+    "SyntaxError": (
+        "Python couldn't understand the code's grammar.",
+        "Check the indicated line for a missing colon, unmatched quote or bracket, or a misspelled keyword."
+    ),
+}
+
+
+def _show_friendly_error(exc, tb=None):
+    """Show a short explanation and likely fix instead of a full traceback."""
+    kind = type(exc).__name__
+    explanation, fix = _ERROR_HELP.get(
+        kind,
+        ("Your code stopped because Python raised an error.",
+         "Check the error message below and the line where it happened. If you're stuck, share this message for help.")
+    )
+
+    line = getattr(exc, "lineno", None) if isinstance(exc, SyntaxError) else None
+    source = getattr(exc, "text", None) if isinstance(exc, SyntaxError) else None
+    if tb is not None:
+        try:
+            frames = traceback.extract_tb(tb)
+            user_frames = [frame for frame in frames if frame.filename == "<code>"]
+            if user_frames:
+                line = user_frames[-1].lineno
+                source = user_frames[-1].line or source
+        except Exception:
+            pass
+
+    print("\\n--- PyPhone Error ---")
+    print("Problem:", explanation)
+    if line:
+        print("Line:", line)
+        if source:
+            print("Code:", source.strip())
+    detail = str(exc).strip()
+    if detail:
+        print("Error:", kind + (": " + detail if detail != kind else ""))
+    print("Try this:", fix)
+    print("---------------------")
+
+
 def _worker(code, started):
     with _run_lock:
         _run_tid[0] = threading.get_ident()
@@ -282,8 +377,8 @@ def _worker(code, started):
             exec(compile(code, "<code>", "exec"), {"__name__": "__main__"})
     except KeyboardInterrupt:
         print("Stopped.")
-    except BaseException:
-        traceback.print_exc()
+    except BaseException as exc:
+        _show_friendly_error(exc, exc.__traceback__)
     finally:
         with _run_lock:
             _run_tid[0] = 0
@@ -347,8 +442,8 @@ def send_event(arg):
         ui._event(d["id"], d["kind"], d.get("value", ""))
     except KeyboardInterrupt:
         print("Stopped.")
-    except BaseException:
-        traceback.print_exc()
+    except BaseException as exc:
+        _show_friendly_error(exc, exc.__traceback__)
     finally:
         if d["kind"] == "tap":
             with _run_lock:
