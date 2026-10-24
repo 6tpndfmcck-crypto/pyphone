@@ -229,7 +229,7 @@ struct CodeEditor: UIViewRepresentable {
             return found
         }
 
-        private func suggestions(for tok: Token, text: String) {
+        private func suggestions(for tok: Token, text: String) -> [String] {
             let pool: [String]
             if let owner = tok.owner {
                 if let known = Vocab.members[owner] {
