@@ -99,8 +99,11 @@ static NSString *exceptionText(void) {
     // Frameworks directory; set this before CPython imports user packages.
     NSURL *frameworks = NSBundle.mainBundle.privateFrameworksURL;
     NSString *sdl2Dir = [frameworks URLByAppendingPathComponent:@"SDL2.framework" isDirectory:YES].path;
-    if (sdl2Dir.length && [fm fileExistsAtPath:[sdl2Dir stringByAppendingPathComponent:@"SDL2"]]) {
-        setenv("PYSDL2_DLL_PATH", sdl2Dir.UTF8String, 1);
+    if (frameworks.path.length && sdl2Dir.length &&
+        [fm fileExistsAtPath:[sdl2Dir stringByAppendingPathComponent:@"SDL2"]]) {
+        // PySDL2 searches inside this directory for SDL2.framework/SDL2.
+        // Point to Frameworks, not SDL2.framework itself.
+        setenv("PYSDL2_DLL_PATH", frameworks.path.UTF8String, 1);
     }
 
     PyStatus status;
