@@ -212,9 +212,9 @@ struct CodeEditor: UIViewRepresentable {
 
         private func definedWords(_ text: String) -> [String] {
             let patterns = [
-                #"(?m)\\b(?:async\\s+def|def|class)\\s+([A-Za-z_][A-Za-z0-9_]*)"#,
-                #"(?m)^\\s*(?:from\\s+[\\w.]+\\s+import\\s+|import\\s+)([A-Za-z_][A-Za-z0-9_]*)"#,
-                #"(?m)\\b([A-Za-z_][A-Za-z0-9_]*)\\s*=(?!=)"#
+                #"(?m)\b(?:async\s+def|def|class)\s+([A-Za-z_][A-Za-z0-9_]*)"#,
+                #"(?m)^\s*(?:from\s+[\w.]+\s+import\s+|import\s+)([A-Za-z_][A-Za-z0-9_]*)"#,
+                #"(?m)\b([A-Za-z_][A-Za-z0-9_]*)\s*=(?!=)"#
             ]
             let ns = text as NSString
             var found: [String] = []
