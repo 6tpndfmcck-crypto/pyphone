@@ -226,6 +226,37 @@ def _process_dropped_packages():
 
 _process_dropped_packages()
 
+
+def _patch_pysdl2_ios_framework_lookup():
+    """Teach pure-Python PySDL2 to search Apple frameworks on iOS."""
+    if sys.platform != "ios":
+        return
+    for entry in sys.path:
+        if not entry:
+            continue
+        dll_file = Path(entry) / "sdl2" / "dll.py"
+        if not dll_file.is_file():
+            continue
+        try:
+            source = dll_file.read_text(encoding="utf-8")
+            patched = source.replace(
+                'elif platform == "darwin":',
+                'elif platform in ("darwin", "ios"):',
+            ).replace(
+                "elif platform == 'darwin':",
+                "elif platform in ('darwin', 'ios'):",
+            )
+            if patched != source:
+                dll_file.write_text(patched, encoding="utf-8")
+                print("Enabled iOS SDL2.framework lookup for PySDL2.")
+            return
+        except OSError as exc:
+            print("Could not apply PySDL2 iOS compatibility fix:", exc)
+            return
+
+
+_patch_pysdl2_ios_framework_lookup()
+
 import ui
 
 _run_tid = [0]
