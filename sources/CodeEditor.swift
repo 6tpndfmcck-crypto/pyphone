@@ -10,7 +10,7 @@ enum Vocab {
         words("False None True and as assert async await break case class continue def del elif else except finally for from global if import in is lambda match nonlocal not or pass raise return try while with yield")
         + words("abs all any bin bool bytes callable chr dict dir divmod enumerate eval exec filter float format frozenset getattr globals hasattr hash hex id input int isinstance issubclass iter len list locals map max min next object oct open ord pow print property range repr reversed round set setattr slice sorted staticmethod str sum super tuple type vars zip")
         + words("Exception ValueError TypeError KeyError IndexError RuntimeError StopIteration KeyboardInterrupt ZeroDivisionError AttributeError ImportError NameError OSError")
-        + words("math random time json os sys datetime re string numpy collections itertools functools threading statistics decimal fractions copy textwrap base64 hashlib uuid pathlib typing dataclasses enum csv sqlite3 urllib heapq bisect")
+        + words("math random time json os sys datetime re string numpy np collections itertools functools threading statistics decimal fractions copy textwrap base64 hashlib uuid pathlib typing dataclasses enum csv sqlite3 urllib heapq bisect pilIOS pyUI colorama sdl2")
         + words("ui label entry button clear")
 
     static let generic: [String] = words("append extend insert remove pop sort reverse index count join split strip lstrip rstrip replace upper lower title capitalize format startswith endswith find keys values items get update add copy clear isdigit isalpha")
@@ -29,6 +29,9 @@ enum Vocab {
         "datetime": words("datetime date time timedelta timezone"),
         "string": words("ascii_letters ascii_lowercase ascii_uppercase digits punctuation whitespace"),
         "ui": words("label entry button clear"),
+        "pilIOS": words("Image new save open load draw pixel line rectangle ellipse text resize crop rotate paste getpixel putpixel"),
+        "colorama": words("Fore Back Style init just_fix_windows_console RESET BLACK RED GREEN YELLOW BLUE MAGENTA CYAN WHITE LIGHTBLACK_EX LIGHTRED_EX LIGHTGREEN_EX LIGHTYELLOW_EX LIGHTBLUE_EX LIGHTMAGENTA_EX LIGHTCYAN_EX LIGHTWHITE_EX BRIGHT DIM NORMAL"),
+        "sdl2": words("SDL_Init SDL_Quit SDL_GetError SDL_GetVersion SDL_INIT_VIDEO SDL_INIT_AUDIO SDL_CreateWindow SDL_DestroyWindow SDL_PollEvent SDL_Delay SDL_WINDOW_SHOWN SDL_WINDOWPOS_CENTERED"),
     ]
 
     static let symbols: [String] = ["(", ")", ":", "\"", "'", "=", "[", "]", "{", "}", "_", "#", ".", ",", "+", "-", "*", "/", "%", "<", ">"]
@@ -207,14 +210,32 @@ struct CodeEditor: UIViewRepresentable {
             }
         }
 
-        private func suggestions(for tok: Token, text: String) -> [String] {
+        private func definedWords(_ text: String) -> [String] {
+            let patterns = [
+                #"(?m)\\b(?:async\\s+def|def|class)\\s+([A-Za-z_][A-Za-z0-9_]*)"#,
+                #"(?m)^\\s*(?:from\\s+[\\w.]+\\s+import\\s+|import\\s+)([A-Za-z_][A-Za-z0-9_]*)"#,
+                #"(?m)\\b([A-Za-z_][A-Za-z0-9_]*)\\s*=(?!=)"#
+            ]
+            let ns = text as NSString
+            var found: [String] = []
+            for pattern in patterns {
+                guard let re = try? NSRegularExpression(pattern: pattern) else { continue }
+                for match in re.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
+                    if match.numberOfRanges > 1, match.range(at: 1).location != NSNotFound {
+                        found.append(ns.substring(with: match.range(at: 1)))
+                    }
+                }
+            }
+            return found
+        }
+
+        private func suggestions(for tok: Token, text: String) {
             let pool: [String]
             if let owner = tok.owner {
                 if let known = Vocab.members[owner] {
                     pool = known
-                } else if tok.prefix.isEmpty {
-                    return []
                 } else {
+                    // Unknown objects can still offer common Python methods and names in this file.
                     pool = Vocab.generic + documentWords(text)
                 }
             } else {
@@ -222,12 +243,18 @@ struct CodeEditor: UIViewRepresentable {
                 pool = Vocab.globals + documentWords(text)
             }
             let lower = tok.prefix.lowercased()
+            let defined = definedWords(text)
             var seen = Set<String>()
             var out: [String] = []
-            for w in pool where w != tok.prefix && w.lowercased().hasPrefix(lower) {
+            for w in defined + pool where w != tok.prefix && w.lowercased().hasPrefix(lower) {
                 if seen.insert(w).inserted { out.append(w) }
             }
-            out.sort { $0.count != $1.count ? $0.count < $1.count : $0 < $1 }
+            let definedSet = Set(defined)
+            out.sort {
+                let lhsDefined = definedSet.contains($0), rhsDefined = definedSet.contains($1)
+                if lhsDefined != rhsDefined { return lhsDefined }
+                return $0.count != $1.count ? $0.count < $1.count : $0 < $1
+            }
             return Array(out.prefix(tok.prefix.isEmpty ? 30 : 14))
         }
     }
