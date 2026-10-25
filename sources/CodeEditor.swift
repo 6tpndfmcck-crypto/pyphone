@@ -138,8 +138,8 @@ struct CodeEditor: UIViewRepresentable {
 
         func updateLineNumbers() {
             guard let tv = tv, let gutter = gutter else { return }
-            let count = max(1, tv.text.components(separatedBy: "\\n").count)
-            gutter.text = (1...count).map(String.init).joined(separator: "\\n")
+            let count = max(1, tv.text.components(separatedBy: "\n").count)
+            gutter.text = (1...count).map(String.init).joined(separator: "\n")
             gutter.textContainerInset = UIEdgeInsets(top: 8, left: 0, bottom: 8, right: 7)
             gutter.transform = CGAffineTransform(translationX: 0, y: -tv.contentOffset.y)
         }
@@ -165,10 +165,10 @@ struct CodeEditor: UIViewRepresentable {
 
             // Comments and quoted strings are highlighted before keywords and numbers.
             paint("#[^\\n]*", .systemGreen)
-            paint(#"(?s)(\"\"\".*?\"\"\"|''' .*? '''|\"(?:\\\\.|[^\"\\\\])*\"|'(?:\\\\.|[^'\\\\])*')"#.replacingOccurrences(of: "''' .*? '''", with: "'''.*?'''"), .systemRed)
-            paint(#"\\b(False|None|True|and|as|assert|async|await|break|class|continue|def|del|elif|else|except|finally|for|from|global|if|import|in|is|lambda|match|nonlocal|not|or|pass|raise|return|try|while|with|yield)\\b"#, .systemPurple)
-            paint(#"\\b[0-9]+(?:\\.[0-9]+)?\\b"#, .systemOrange)
-            paint(#"\\b(print|input|len|range|int|float|str|bool|list|dict|set|tuple|sum|min|max|round|abs|enumerate|zip|open|super|type|isinstance)\\b(?=\\s*\\()"#, .systemBlue)
+            paint("\"(?:\\\\.|[^\"\\\\])*\"|'(?:\\\\.|[^'\\\\])*'", .systemRed)
+            paint("\\\\b(False|None|True|and|as|assert|async|await|break|class|continue|def|del|elif|else|except|finally|for|from|global|if|import|in|is|lambda|match|nonlocal|not|or|pass|raise|return|try|while|with|yield)\\\\b", .systemPurple)
+            paint("\\\\b[0-9]+(?:\\\\.[0-9]+)?\\\\b", .systemOrange)
+            paint("\\\\b(print|input|len|range|int|float|str|bool|list|dict|set|tuple|sum|min|max|round|abs|enumerate|zip|open|super|type|isinstance)\\\\b(?=\\\\s*\\\\()", .systemBlue)
             storage.endEditing()
             tv.selectedRange = NSRange(location: min(selection.location, ns.length), length: min(selection.length, max(0, ns.length - selection.location)))
             tv.typingAttributes = [.font: font, .foregroundColor: UIColor.label]
