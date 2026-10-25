@@ -1,0 +1,27 @@
+name: ScrollingChecks
+options:
+  deploymentTarget:
+    iOS: "16.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    GENERATE_INFOPLIST_FILE: YES
+targets:
+  ScrollingChecks:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - sources/CodeEditor.swift
+      - sources/TerminalView.swift
+      - tests/ScrollingTests.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.pyphone.scrolling-tests
+schemes:
+  ScrollingChecks:
+    build:
+      targets:
+        ScrollingChecks: all
+    test:
+      targets:
+        - ScrollingChecks

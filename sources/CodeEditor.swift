@@ -63,7 +63,6 @@ final class LineNumberGutter: UIView {
     override func draw(_ rect: CGRect) {
         guard let textView = textView else { return }
         let layout = textView.layoutManager
-        layout.ensureLayout(for: textView.textContainer)
         let font = textView.font ?? UIFont.monospacedSystemFont(ofSize: 14, weight: .regular)
         let attributes: [NSAttributedString.Key: Any] = [
             .font: font, .foregroundColor: UIColor.secondaryLabel
@@ -88,11 +87,21 @@ final class LineNumberGutter: UIView {
 }
 
 final class EditorTextView: UITextView {
-    var onLayout: (() -> Void)?
+    let gutter = LineNumberGutter()
+    var gutterWidth: CGFloat = 34 {
+        didSet {
+            textContainerInset.left = gutterWidth + 6
+            setNeedsLayout()
+        }
+    }
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        onLayout?()
+        // Subviews of a scroll view use content coordinates. Pin the gutter to
+        // the visible viewport without forcing another text layout from draw().
+        gutter.frame = CGRect(x: contentOffset.x, y: contentOffset.y,
+                              width: gutterWidth, height: bounds.height)
+        gutter.setNeedsDisplay()
     }
 }
 
@@ -101,17 +110,22 @@ struct CodeEditor: UIViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
-    func makeUIView(context: Context) -> UIView {
-        let container = UIView()
-        container.backgroundColor = .systemBackground
-
-        let gutter = LineNumberGutter()
-        gutter.backgroundColor = .secondarySystemBackground
-        gutter.translatesAutoresizingMaskIntoConstraints = false
-
-        let tv = EditorTextView(frame: .zero, textContainer: nil)
+    func makeUIView(context: Context) -> EditorTextView {
+        // Start in TextKit 1, which is also used to draw the gutter. Switching
+        // layout engines during drawing can invalidate UITextView's scroll size.
+        let storage = NSTextStorage()
+        let layout = NSLayoutManager()
+        let textContainer = NSTextContainer(size: CGSize(width: 0, height: .greatestFiniteMagnitude))
+        textContainer.widthTracksTextView = true
+        textContainer.heightTracksTextView = false
+        layout.addTextContainer(textContainer)
+        storage.addLayoutManager(layout)
+        let tv = EditorTextView(frame: .zero, textContainer: textContainer)
+        let gutter = tv.gutter
         gutter.textView = tv
-        tv.onLayout = { [weak gutter] in gutter?.setNeedsDisplay() }
+        gutter.backgroundColor = .secondarySystemBackground
+        gutter.isUserInteractionEnabled = false
+        tv.addSubview(gutter)
         tv.delegate = context.coordinator
         tv.font = UIFont.monospacedSystemFont(ofSize: 14, weight: .regular)
         tv.textColor = .label
@@ -122,37 +136,22 @@ struct CodeEditor: UIViewRepresentable {
         tv.smartQuotesType = .no
         tv.smartDashesType = .no
         tv.smartInsertDeleteType = .no
+        tv.isScrollEnabled = true
+        tv.showsVerticalScrollIndicator = true
         tv.alwaysBounceVertical = true
         tv.keyboardDismissMode = .interactive
-        tv.textContainerInset = UIEdgeInsets(top: 8, left: 6, bottom: 8, right: 6)
+        tv.textContainerInset = UIEdgeInsets(top: 8, left: tv.gutterWidth + 6, bottom: 8, right: 6)
         tv.text = text
-        tv.translatesAutoresizingMaskIntoConstraints = false
-
-        container.addSubview(gutter)
-        container.addSubview(tv)
-        let gutterWidth = gutter.widthAnchor.constraint(equalToConstant: 34)
-        NSLayoutConstraint.activate([
-            gutter.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            gutter.topAnchor.constraint(equalTo: container.topAnchor),
-            gutter.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-            gutterWidth,
-            tv.leadingAnchor.constraint(equalTo: gutter.trailingAnchor),
-            tv.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            tv.topAnchor.constraint(equalTo: container.topAnchor),
-            tv.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-        ])
-
         context.coordinator.tv = tv
         context.coordinator.gutter = gutter
-        context.coordinator.gutterWidth = gutterWidth
         tv.inputAccessoryView = context.coordinator.makeBar()
         context.coordinator.applyHighlighting()
         context.coordinator.updateLineNumbers()
         context.coordinator.refresh()
-        return container
+        return tv
     }
 
-    func updateUIView(_ view: UIView, context: Context) {
+    func updateUIView(_ view: EditorTextView, context: Context) {
         context.coordinator.parent = self
         guard let tv = context.coordinator.tv else { return }
         if tv.text != text {
@@ -163,6 +162,12 @@ struct CodeEditor: UIViewRepresentable {
         }
     }
 
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: EditorTextView, context: Context) -> CGSize? {
+        guard let width = proposal.width, let height = proposal.height else { return nil }
+        // The viewport fills the available area; the document scrolls inside it.
+        return CGSize(width: width, height: height)
+    }
+
     struct Token {
         let prefix: String
         let range: NSRange
@@ -171,9 +176,8 @@ struct CodeEditor: UIViewRepresentable {
 
     final class Coordinator: NSObject, UITextViewDelegate {
         var parent: CodeEditor
-        weak var tv: UITextView?
+        weak var tv: EditorTextView?
         weak var gutter: LineNumberGutter?
-        var gutterWidth: NSLayoutConstraint?
         private let scroll = UIScrollView()
         private let stack = UIStackView()
 
@@ -202,7 +206,8 @@ struct CodeEditor: UIViewRepresentable {
             gutter.updateLines()
             // Leave enough room when source line numbers reach four digits.
             let digits = String(gutter.lineStarts.count).count
-            gutterWidth?.constant = max(34, CGFloat(digits) * 9 + 10)
+            let width = max(34, CGFloat(digits) * 9 + 10)
+            if tv?.gutterWidth != width { tv?.gutterWidth = width }
         }
 
         func applyHighlighting() {
@@ -211,6 +216,7 @@ struct CodeEditor: UIViewRepresentable {
             let ns = source as NSString
             let full = NSRange(location: 0, length: ns.length)
             let selection = tv.selectedRange
+            let offset = tv.contentOffset
             let font = UIFont.monospacedSystemFont(ofSize: 14, weight: .regular)
             let storage = tv.textStorage
 
@@ -241,6 +247,7 @@ struct CodeEditor: UIViewRepresentable {
             storage.endEditing()
             tv.selectedRange = NSRange(location: min(selection.location, ns.length), length: min(selection.length, max(0, ns.length - selection.location)))
             tv.typingAttributes = [.font: font, .foregroundColor: UIColor.label]
+            tv.setContentOffset(offset, animated: false)
         }
 
         // MARK: Suggestion bar

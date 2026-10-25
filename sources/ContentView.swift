@@ -114,8 +114,11 @@ struct ContentView: View {
             }
 
             if tab == 0 {
-                CodeEditor(text: $code)
-                    .padding(.horizontal, 4)
+                GeometryReader { viewport in
+                    CodeEditor(text: $code)
+                        .frame(width: viewport.size.width, height: viewport.size.height)
+                }
+                .padding(.horizontal, 4)
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
@@ -153,14 +156,9 @@ struct ContentView: View {
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                     .background(Color(.secondarySystemBackground))
-                    ScrollView {
-                        Text(runner.output.isEmpty ? "Terminal output appears here." : runner.output)
-                            .font(.system(size: 12, design: .monospaced))
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(10)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color(.secondarySystemBackground))
+                    TerminalView(output: runner.output)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(Color(.secondarySystemBackground))
                 }
                 .frame(height: terminalHeight)
                 .background(Color(.secondarySystemBackground))
@@ -258,3 +256,4 @@ struct WidgetView: View {
         }
     }
 }
+
