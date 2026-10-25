@@ -69,17 +69,17 @@ jobs:
           else
             echo "Using preinstalled xcodegen"
           fi
-          if ! brew list --versions python@3.13 >/dev/null 2>&1; then
+          if ! command -v python3.13 >/dev/null 2>&1; then
             brew install python@3.13
           else
-            echo "Using preinstalled Python 3.13"
+            echo "Using available Python 3.13: $(command -v python3.13)"
           fi
 
       - name: Prepare Python runtime and NumPy
         shell: bash
         run: |
           set -euo pipefail
-          PYTHON_BIN="$(brew --prefix python@3.13)/bin/python3.13"
+          PYTHON_BIN="$(command -v python3.13)"
           "$PYTHON_BIN" --version
           rm -rf py Python.xcframework python-stdlib .build-venv
           mkdir -p py
