@@ -140,7 +140,6 @@ struct CodeEditor: UIViewRepresentable {
             guard let tv = tv, let gutter = gutter else { return }
             let count = max(1, tv.text.components(separatedBy: "\n").count)
             gutter.text = (1...count).map(String.init).joined(separator: "\n")
-            gutter.textContainerInset = UIEdgeInsets(top: 8, left: 0, bottom: 8, right: 7)
             gutter.transform = CGAffineTransform(translationX: 0, y: -tv.contentOffset.y)
         }
 
