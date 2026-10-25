@@ -115,7 +115,7 @@ struct CodeEditor: UIViewRepresentable {
         // layout engines during drawing can invalidate UITextView's scroll size.
         let storage = NSTextStorage()
         let layout = NSLayoutManager()
-        let textContainer = NSTextContainer(size: CGSize(width: 0, height: .greatestFiniteMagnitude))
+        let textContainer = NSTextContainer(size: CGSize(width: 0, height: CGFloat.greatestFiniteMagnitude))
         textContainer.widthTracksTextView = true
         textContainer.heightTracksTextView = false
         layout.addTextContainer(textContainer)
