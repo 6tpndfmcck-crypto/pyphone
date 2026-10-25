@@ -166,9 +166,9 @@ struct CodeEditor: UIViewRepresentable {
             // Comments and quoted strings are highlighted before keywords and numbers.
             paint("#[^\\n]*", .systemGreen)
             paint("\"(?:\\\\.|[^\"\\\\])*\"|'(?:\\\\.|[^'\\\\])*'", .systemRed)
-            paint("\\\\b(False|None|True|and|as|assert|async|await|break|class|continue|def|del|elif|else|except|finally|for|from|global|if|import|in|is|lambda|match|nonlocal|not|or|pass|raise|return|try|while|with|yield)\\\\b", .systemPurple)
-            paint("\\\\b[0-9]+(?:\\\\.[0-9]+)?\\\\b", .systemOrange)
-            paint("\\\\b(print|input|len|range|int|float|str|bool|list|dict|set|tuple|sum|min|max|round|abs|enumerate|zip|open|super|type|isinstance)\\\\b(?=\\\\s*\\\\()", .systemBlue)
+            paint("\\b(False|None|True|and|as|assert|async|await|break|class|continue|def|del|elif|else|except|finally|for|from|global|if|import|in|is|lambda|match|nonlocal|not|or|pass|raise|return|try|while|with|yield)\\b", .systemPurple)
+            paint("\\b[0-9]+(?:\\.[0-9]+)?\\b", .systemOrange)
+            paint("\\b(print|input|len|range|int|float|str|bool|list|dict|set|tuple|sum|min|max|round|abs|enumerate|zip|open|super|type|isinstance)\\b(?=\\s*\\()", .systemBlue)
             storage.endEditing()
             tv.selectedRange = NSRange(location: min(selection.location, ns.length), length: min(selection.length, max(0, ns.length - selection.location)))
             tv.typingAttributes = [.font: font, .foregroundColor: UIColor.label]
