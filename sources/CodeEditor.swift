@@ -46,6 +46,13 @@ struct CodeEditor: UIViewRepresentable {
         let container = UIView()
         container.backgroundColor = .systemBackground
 
+        let gutterScroll = UIScrollView()
+        gutterScroll.backgroundColor = .secondarySystemBackground
+        gutterScroll.showsVerticalScrollIndicator = false
+        gutterScroll.showsHorizontalScrollIndicator = false
+        gutterScroll.isScrollEnabled = false
+        gutterScroll.translatesAutoresizingMaskIntoConstraints = false
+
         let gutter = UILabel()
         gutter.font = UIFont.monospacedSystemFont(ofSize: 14, weight: .regular)
         gutter.textColor = .tertiaryLabel
@@ -53,6 +60,7 @@ struct CodeEditor: UIViewRepresentable {
         gutter.numberOfLines = 0
         gutter.backgroundColor = .secondarySystemBackground
         gutter.translatesAutoresizingMaskIntoConstraints = false
+        gutterScroll.addSubview(gutter)
 
         let tv = UITextView()
         tv.delegate = context.coordinator
@@ -71,14 +79,19 @@ struct CodeEditor: UIViewRepresentable {
         tv.text = text
         tv.translatesAutoresizingMaskIntoConstraints = false
 
-        container.addSubview(gutter)
+        container.addSubview(gutterScroll)
         container.addSubview(tv)
         NSLayoutConstraint.activate([
-            gutter.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            gutter.topAnchor.constraint(equalTo: container.topAnchor),
-            gutter.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-            gutter.widthAnchor.constraint(equalToConstant: 34),
-            tv.leadingAnchor.constraint(equalTo: gutter.trailingAnchor),
+            gutterScroll.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            gutterScroll.topAnchor.constraint(equalTo: container.topAnchor),
+            gutterScroll.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            gutterScroll.widthAnchor.constraint(equalToConstant: 34),
+            gutter.leadingAnchor.constraint(equalTo: gutterScroll.contentLayoutGuide.leadingAnchor, constant: 2),
+            gutter.trailingAnchor.constraint(equalTo: gutterScroll.contentLayoutGuide.trailingAnchor, constant: -2),
+            gutter.topAnchor.constraint(equalTo: gutterScroll.contentLayoutGuide.topAnchor, constant: 8),
+            gutter.bottomAnchor.constraint(equalTo: gutterScroll.contentLayoutGuide.bottomAnchor, constant: -8),
+            gutter.widthAnchor.constraint(equalTo: gutterScroll.frameLayoutGuide.widthAnchor, constant: -4),
+            tv.leadingAnchor.constraint(equalTo: gutterScroll.trailingAnchor),
             tv.trailingAnchor.constraint(equalTo: container.trailingAnchor),
             tv.topAnchor.constraint(equalTo: container.topAnchor),
             tv.bottomAnchor.constraint(equalTo: container.bottomAnchor),
@@ -86,7 +99,9 @@ struct CodeEditor: UIViewRepresentable {
 
         context.coordinator.tv = tv
         context.coordinator.gutter = gutter
+        context.coordinator.gutterScroll = gutterScroll
         tv.inputAccessoryView = context.coordinator.makeBar()
+        context.coordinator.applyHighlighting()
         context.coordinator.updateLineNumbers()
         context.coordinator.refresh()
         return container
@@ -113,6 +128,7 @@ struct CodeEditor: UIViewRepresentable {
         var parent: CodeEditor
         weak var tv: UITextView?
         weak var gutter: UILabel?
+        weak var gutterScroll: UIScrollView?
         private let scroll = UIScrollView()
         private let stack = UIStackView()
 
@@ -131,7 +147,7 @@ struct CodeEditor: UIViewRepresentable {
 
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
             guard let tv = tv, scrollView === tv else { return }
-            gutter?.transform = CGAffineTransform(translationX: 0, y: -tv.contentOffset.y)
+            gutterScroll?.contentOffset = CGPoint(x: 0, y: tv.contentOffset.y)
         }
 
         // MARK: Syntax highlighting and line numbers
@@ -140,7 +156,7 @@ struct CodeEditor: UIViewRepresentable {
             guard let tv = tv, let gutter = gutter else { return }
             let count = max(1, tv.text.components(separatedBy: "\n").count)
             gutter.text = (1...count).map(String.init).joined(separator: "\n")
-            gutter.transform = CGAffineTransform(translationX: 0, y: -tv.contentOffset.y)
+            gutterScroll?.contentOffset = CGPoint(x: 0, y: tv.contentOffset.y)
         }
 
         func applyHighlighting() {
