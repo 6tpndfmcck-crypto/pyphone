@@ -98,7 +98,7 @@ def main():
     while runner._prompt[0] is None and time.monotonic() < deadline:
         time.sleep(0.02)
     assert runner._prompt[0] == "Name? ", "input() did not publish its prompt"
-    runner.input_reply("Alice")
+    runner.input_reply(json.dumps({"prompt_id": runner._prompt_id[0], "text": "Alice"}))
     wait_for_runner(runner)
     output = runner.take_output()
     assert "Name? Alice" in output and "hello Alice" in output, (
@@ -129,7 +129,11 @@ def main():
     )
     runner.run_code("print('callback-overlap-should-not-run')")
     callback.join(timeout=5)
-    assert not callback.is_alive(), "UI callback did not finish"
+    assert not callback.is_alive(), "UI bridge call did not return"
+    deadline = time.monotonic() + 5
+    while runner._callback_running[0] and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert not runner._callback_running[0], "UI callback did not finish"
     output = runner.take_output()
     assert "Already running" in output, "Run was not blocked during a UI callback"
     assert "callback-overlap-should-not-run" not in output, (
@@ -144,3 +148,4 @@ except BaseException:
     raise SystemExit(1)
 else:
     REAL_STDOUT.write("PyPhone Python runner/UI smoke tests passed.\n")
+

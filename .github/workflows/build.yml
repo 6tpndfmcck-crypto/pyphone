@@ -140,9 +140,10 @@ jobs:
           export PYTHONPYCACHEPREFIX=/tmp/pyphone-pycache
           rm -rf "$PYTHONPYCACHEPREFIX"
           "$BUILD_PYTHON" -m pip install --only-binary=:all: "numpy==2.3.5"
-          "$BUILD_PYTHON" -m py_compile app/runner.py app/ui.py scripts/test_runtime.py scripts/test_contracts.py
+          "$BUILD_PYTHON" -m py_compile app/runner.py app/ui.py scripts/test_runtime.py scripts/test_contracts.py scripts/test_regressions.py
           "$BUILD_PYTHON" scripts/test_contracts.py
           "$BUILD_PYTHON" scripts/test_runtime.py
+          "$BUILD_PYTHON" scripts/test_regressions.py
           test -f app_packages/numpy/__init__.py
           find app_packages/numpy -type f -name '*.so' -print -quit | grep -q .
           echo "Python runtime tests and NumPy package checks passed."
@@ -304,3 +305,4 @@ jobs:
           path: artifacts/
           if-no-files-found: error
           retention-days: 14
+

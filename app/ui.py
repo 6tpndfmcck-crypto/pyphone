@@ -55,7 +55,7 @@ class Widget:
 
 def _reset():
     _widgets.clear()
-    _next[0] = 0
+    # IDs stay unique so queued events cannot target a replacement widget.
     _seq[0] += 1
 
 
@@ -101,3 +101,4 @@ def _event(id_, kind, value):
             elif kind == "tap" and w._on_click:
                 w._on_click()
             return
+

@@ -13,6 +13,7 @@ struct PyState: Decodable {
     let widgets: [Widget]
     let running: Bool
     let prompt: String?
+    let prompt_id: Int
     let tid: Int
     let seq: Int
 }
@@ -29,13 +30,13 @@ final class Runner: ObservableObject {
     private var lastSeq = -1
     private var tid = 0
     private var inFlight = false
-    private var suppressPromptUntilInputClears = false
+    private var promptID = 0
+    private var submittedPromptID: Int?
     private var stopRequested = false
     // All native-to-Python calls share one serial queue. A state read and its
     // matching output read must not interleave with another poll or UI event.
     private let pythonQueue = DispatchQueue(label: "py.bridge")
-    // Control calls must remain independent so Stop/input can interrupt or
-    // resume a Python callback that is currently occupying pythonQueue.
+    // Keep Stop/input independent of state polling and startup work.
     private let controlQueue = DispatchQueue(label: "py.control")
 
     init() {
@@ -74,6 +75,7 @@ final class Runner: ObservableObject {
         guard ready, !running else { return }
         output = ""
         running = true
+        tid = 0
         stopRequested = false
         pending += 1
         pythonQueue.async { [self] in
@@ -99,11 +101,13 @@ final class Runner: ObservableObject {
     }
 
     func submitInput(_ text: String) {
-        // Prevent a poll that raced with input_reply from presenting the same
-        // alert again before Python clears its prompt.
-        suppressPromptUntilInputClears = true
+        guard prompt != nil else { return }
+        let payload: [String: Any] = ["prompt_id": promptID, "text": text]
+        guard let data = try? JSONSerialization.data(withJSONObject: payload),
+              let json = String(data: data, encoding: .utf8) else { return }
+        submittedPromptID = promptID
         prompt = nil
-        controlQueue.async { _ = PythonBridge.call("input_reply", arg: text) }
+        controlQueue.async { _ = PythonBridge.call("input_reply", arg: json) }
     }
 
     func tap(_ id: Int) { send(id, "tap", "") }
@@ -115,9 +119,15 @@ final class Runner: ObservableObject {
 
     private func send(_ id: Int, _ kind: String, _ value: String) {
         guard ready else { return }
+        if kind == "tap", running { return }
         let payload: [String: Any] = ["id": id, "kind": kind, "value": value]
         guard let data = try? JSONSerialization.data(withJSONObject: payload),
               let json = String(data: data, encoding: .utf8) else { return }
+        if kind == "tap" {
+            running = true
+            tid = 0
+            stopRequested = false
+        }
         pending += 1
         pythonQueue.async { [self] in
             _ = PythonBridge.call("send_event", arg: json)
@@ -153,12 +163,10 @@ final class Runner: ObservableObject {
         } else if st.running {
             running = true
         }
-        if suppressPromptUntilInputClears {
-            if st.prompt == nil { suppressPromptUntilInputClears = false }
-            prompt = nil
-        } else {
-            prompt = st.prompt
-        }
+        // A new input can start before a poll ever sees the old prompt clear.
+        // Compare request IDs, including when both prompts have identical text.
+        promptID = st.prompt_id
+        prompt = st.prompt_id == submittedPromptID ? nil : st.prompt
         tid = st.tid
         if stopRequested {
             if tid != 0 {
@@ -175,3 +183,4 @@ final class Runner: ObservableObject {
         }
     }
 }
+

@@ -37,6 +37,65 @@ enum Vocab {
     static let symbols: [String] = ["(", ")", ":", "\"", "'", "=", "[", "]", "{", "}", "_", "#", ".", ",", "+", "-", "*", "/", "%", "<", ">"]
 }
 
+// The gutter uses the editor's actual line fragments, so wrapped lines and
+// scrolling do not change which source line a number belongs to.
+final class LineNumberGutter: UIView {
+    weak var textView: UITextView?
+    var lineStarts = [0]
+
+    func updateLines() {
+        guard let textView = textView else { return }
+        let source = (textView.text ?? "") as NSString
+        lineStarts = [0]
+        var location = 0
+        while location < source.length {
+            var end = 0
+            var contentsEnd = 0
+            source.getLineStart(nil, end: &end, contentsEnd: &contentsEnd,
+                                for: NSRange(location: location, length: 0))
+            guard end > location else { break }
+            if end < source.length || contentsEnd < end { lineStarts.append(end) }
+            location = end
+        }
+        setNeedsDisplay()
+    }
+
+    override func draw(_ rect: CGRect) {
+        guard let textView = textView else { return }
+        let layout = textView.layoutManager
+        layout.ensureLayout(for: textView.textContainer)
+        let font = textView.font ?? UIFont.monospacedSystemFont(ofSize: 14, weight: .regular)
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: font, .foregroundColor: UIColor.secondaryLabel
+        ]
+        let length = (textView.text as NSString).length
+        for (index, start) in lineStarts.enumerated() {
+            let fragment: CGRect
+            if start < length {
+                let glyph = layout.glyphIndexForCharacter(at: start)
+                fragment = layout.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
+            } else {
+                fragment = layout.extraLineFragmentRect
+            }
+            let y = fragment.minY + textView.textContainerInset.top - textView.contentOffset.y
+            if y > bounds.maxY { break }
+            if y + font.lineHeight < 0 { continue }
+            let number = String(index + 1) as NSString
+            let width = number.size(withAttributes: attributes).width
+            number.draw(at: CGPoint(x: bounds.width - width - 5, y: y), withAttributes: attributes)
+        }
+    }
+}
+
+final class EditorTextView: UITextView {
+    var onLayout: (() -> Void)?
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        onLayout?()
+    }
+}
+
 struct CodeEditor: UIViewRepresentable {
     @Binding var text: String
 
@@ -46,23 +105,13 @@ struct CodeEditor: UIViewRepresentable {
         let container = UIView()
         container.backgroundColor = .systemBackground
 
-        let gutterScroll = UIScrollView()
-        gutterScroll.backgroundColor = .secondarySystemBackground
-        gutterScroll.showsVerticalScrollIndicator = false
-        gutterScroll.showsHorizontalScrollIndicator = false
-        gutterScroll.isScrollEnabled = false
-        gutterScroll.translatesAutoresizingMaskIntoConstraints = false
-
-        let gutter = UILabel()
-        gutter.font = UIFont.monospacedSystemFont(ofSize: 14, weight: .regular)
-        gutter.textColor = .tertiaryLabel
-        gutter.textAlignment = .right
-        gutter.numberOfLines = 0
+        let gutter = LineNumberGutter()
         gutter.backgroundColor = .secondarySystemBackground
         gutter.translatesAutoresizingMaskIntoConstraints = false
-        gutterScroll.addSubview(gutter)
 
-        let tv = UITextView()
+        let tv = EditorTextView(frame: .zero, textContainer: nil)
+        gutter.textView = tv
+        tv.onLayout = { [weak gutter] in gutter?.setNeedsDisplay() }
         tv.delegate = context.coordinator
         tv.font = UIFont.monospacedSystemFont(ofSize: 14, weight: .regular)
         tv.textColor = .label
@@ -79,19 +128,15 @@ struct CodeEditor: UIViewRepresentable {
         tv.text = text
         tv.translatesAutoresizingMaskIntoConstraints = false
 
-        container.addSubview(gutterScroll)
+        container.addSubview(gutter)
         container.addSubview(tv)
+        let gutterWidth = gutter.widthAnchor.constraint(equalToConstant: 34)
         NSLayoutConstraint.activate([
-            gutterScroll.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            gutterScroll.topAnchor.constraint(equalTo: container.topAnchor),
-            gutterScroll.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-            gutterScroll.widthAnchor.constraint(equalToConstant: 34),
-            gutter.leadingAnchor.constraint(equalTo: gutterScroll.contentLayoutGuide.leadingAnchor, constant: 2),
-            gutter.trailingAnchor.constraint(equalTo: gutterScroll.contentLayoutGuide.trailingAnchor, constant: -2),
-            gutter.topAnchor.constraint(equalTo: gutterScroll.contentLayoutGuide.topAnchor, constant: 8),
-            gutter.bottomAnchor.constraint(equalTo: gutterScroll.contentLayoutGuide.bottomAnchor, constant: -8),
-            gutter.widthAnchor.constraint(equalTo: gutterScroll.frameLayoutGuide.widthAnchor, constant: -4),
-            tv.leadingAnchor.constraint(equalTo: gutterScroll.trailingAnchor),
+            gutter.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            gutter.topAnchor.constraint(equalTo: container.topAnchor),
+            gutter.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            gutterWidth,
+            tv.leadingAnchor.constraint(equalTo: gutter.trailingAnchor),
             tv.trailingAnchor.constraint(equalTo: container.trailingAnchor),
             tv.topAnchor.constraint(equalTo: container.topAnchor),
             tv.bottomAnchor.constraint(equalTo: container.bottomAnchor),
@@ -99,7 +144,7 @@ struct CodeEditor: UIViewRepresentable {
 
         context.coordinator.tv = tv
         context.coordinator.gutter = gutter
-        context.coordinator.gutterScroll = gutterScroll
+        context.coordinator.gutterWidth = gutterWidth
         tv.inputAccessoryView = context.coordinator.makeBar()
         context.coordinator.applyHighlighting()
         context.coordinator.updateLineNumbers()
@@ -127,8 +172,8 @@ struct CodeEditor: UIViewRepresentable {
     final class Coordinator: NSObject, UITextViewDelegate {
         var parent: CodeEditor
         weak var tv: UITextView?
-        weak var gutter: UILabel?
-        weak var gutterScroll: UIScrollView?
+        weak var gutter: LineNumberGutter?
+        var gutterWidth: NSLayoutConstraint?
         private let scroll = UIScrollView()
         private let stack = UIStackView()
 
@@ -147,16 +192,17 @@ struct CodeEditor: UIViewRepresentable {
 
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
             guard let tv = tv, scrollView === tv else { return }
-            gutterScroll?.contentOffset = CGPoint(x: 0, y: tv.contentOffset.y)
+            gutter?.setNeedsDisplay()
         }
 
         // MARK: Syntax highlighting and line numbers
 
         func updateLineNumbers() {
-            guard let tv = tv, let gutter = gutter else { return }
-            let count = max(1, tv.text.components(separatedBy: "\n").count)
-            gutter.text = (1...count).map(String.init).joined(separator: "\n")
-            gutterScroll?.contentOffset = CGPoint(x: 0, y: tv.contentOffset.y)
+            guard let gutter = gutter else { return }
+            gutter.updateLines()
+            // Leave enough room when source line numbers reach four digits.
+            let digits = String(gutter.lineStarts.count).count
+            gutterWidth?.constant = max(34, CGFloat(digits) * 9 + 10)
         }
 
         func applyHighlighting() {
@@ -178,12 +224,20 @@ struct CodeEditor: UIViewRepresentable {
                 }
             }
 
-            // Comments and quoted strings are highlighted before keywords and numbers.
-            paint("#[^\\n]*", .systemGreen)
-            paint("\"(?:\\\\.|[^\"\\\\])*\"|'(?:\\\\.|[^'\\\\])*'", .systemRed)
+            // Apply code colors first; lexical strings/comments take precedence.
             paint("\\b(False|None|True|and|as|assert|async|await|break|class|continue|def|del|elif|else|except|finally|for|from|global|if|import|in|is|lambda|match|nonlocal|not|or|pass|raise|return|try|while|with|yield)\\b", .systemPurple)
             paint("\\b[0-9]+(?:\\.[0-9]+)?\\b", .systemOrange)
             paint("\\b(print|input|len|range|int|float|str|bool|list|dict|set|tuple|sum|min|max|round|abs|enumerate|zip|open|super|type|isinstance)\\b(?=\\s*\\()", .systemBlue)
+            // One combined scan keeps # inside strings and quotes inside comments
+            // from being mistaken for separate tokens. Include multiline strings.
+            let literals = #"(?:[rRuUbBfF]{0,2})?(?:\"\"\"[\s\S]*?(?:\"\"\"|\z)|\'\'\'[\s\S]*?(?:\'\'\'|\z)|\"(?:\\.|[^\"\\\r\n])*(?:\"|$)|'(?:\\.|[^'\\\r\n])*(?:'|$))|#[^\r\n]*"#
+            if let regex = try? NSRegularExpression(pattern: literals, options: [.anchorsMatchLines]) {
+                for match in regex.matches(in: source, range: full) {
+                    let token = ns.substring(with: match.range)
+                    let color = token.hasPrefix("#") ? UIColor.systemGreen : UIColor.systemRed
+                    storage.addAttribute(.foregroundColor, value: color, range: match.range)
+                }
+            }
             storage.endEditing()
             tv.selectedRange = NSRange(location: min(selection.location, ns.length), length: min(selection.length, max(0, ns.length - selection.location)))
             tv.typingAttributes = [.font: font, .foregroundColor: UIColor.label]
@@ -353,3 +407,4 @@ struct CodeEditor: UIViewRepresentable {
         }
     }
 }
+

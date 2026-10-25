@@ -1,0 +1,167 @@
+#!/usr/bin/env python3
+"""Regression tests for input, callbacks, diagnostics, and package installation."""
+import builtins
+import importlib
+import json
+import os
+from pathlib import Path
+import sys
+import tempfile
+import threading
+import time
+import unittest
+from unittest import mock
+import zipfile
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "app"))
+CONSOLE = sys.stderr
+DOCUMENTS = tempfile.TemporaryDirectory(prefix="pyphone-regressions-")
+os.environ["PYPHONE_DOCUMENTS"] = DOCUMENTS.name
+import runner
+import ui
+
+
+def wait_until(predicate):
+    deadline = time.monotonic() + 5
+    while not predicate():
+        if time.monotonic() >= deadline:
+            raise AssertionError("Timed out waiting for Python")
+        time.sleep(0.01)
+
+
+class Regressions(unittest.TestCase):
+    def setUp(self):
+        wait_until(lambda: not runner._running[0] and not runner._cb_tid[0])
+        runner.take_output()
+        ui.clear()
+
+    def test_error_without_colorama(self):
+        with mock.patch.dict(sys.modules, {"colorama": None}):
+            runner._show_friendly_error(ValueError("bad value"))
+        output = runner.take_output()
+        self.assertIn("WHAT HAPPENED", output)
+        self.assertIn("HOW TO FIX IT", output)
+
+    def test_runtime_error_shows_source_and_real_suggestion(self):
+        runner.run_code("score = 10\nprint(socre)\n")
+        wait_until(lambda: not runner._running[0])
+        output = runner.take_output()
+        self.assertIn("print(socre)", output)
+        self.assertIn("Did you mean 'score'", output)
+        self.assertNotIn("Did you mean 'socre'", output)
+
+    def test_multiline_code_is_not_a_pip_command(self):
+        with mock.patch.object(runner.urllib.request, "urlopen") as network:
+            self.assertFalse(runner._pip_install_command("pip install demo\nprint('hello')"))
+            network.assert_not_called()
+
+    def test_consecutive_identical_prompts_have_distinct_ids(self):
+        runner.run_code("a = input('Answer?')\nb = input('Answer?')\nprint(a, b)")
+        try:
+            wait_until(lambda: runner._prompt[0] is not None)
+            first = json.loads(runner.get_state())
+            self.assertIn("prompt_id", first)
+            runner.input_reply(json.dumps({"prompt_id": first["prompt_id"], "text": "first"}))
+            wait_until(lambda: json.loads(runner.get_state())["prompt_id"] != first["prompt_id"])
+            second = json.loads(runner.get_state())
+            self.assertEqual(second["prompt"], "Answer?")
+            runner.input_reply(json.dumps({"prompt_id": first["prompt_id"], "text": "stale"}))
+            self.assertFalse(runner._got.is_set(), "Old reply answered the new prompt")
+            runner.input_reply(json.dumps({"prompt_id": second["prompt_id"], "text": "second"}))
+            wait_until(lambda: not runner._running[0])
+            self.assertIn("first second", runner.take_output())
+        finally:
+            # Also clean up when this regression is run against the old runner.
+            for _ in range(2):
+                if runner._prompt[0] is not None:
+                    state = json.loads(runner.get_state())
+                    reply = json.dumps({"prompt_id": state["prompt_id"], "text": ""}) if "prompt_id" in state else ""
+                    runner.input_reply(reply)
+                time.sleep(0.03)
+
+    def test_callback_does_not_block_bridge(self):
+        entered, release, returned = threading.Event(), threading.Event(), threading.Event()
+        def callback():
+            entered.set()
+            release.wait(5)
+        button = ui.button("Wait", callback)
+        def invoke():
+            runner.send_event(json.dumps({"id": button.id, "kind": "tap"}))
+            returned.set()
+        caller = threading.Thread(target=invoke)
+        caller.start()
+        try:
+            self.assertTrue(entered.wait(2))
+            self.assertTrue(returned.wait(0.5), "Callback occupies the serial bridge queue")
+            state = json.loads(runner.get_state())
+            self.assertTrue(state["running"])
+            self.assertNotEqual(state["tid"], 0)
+        finally:
+            release.set()
+            caller.join(5)
+            wait_until(lambda: not runner._cb_tid[0])
+
+    def test_old_widget_event_cannot_hit_new_widget(self):
+        calls = []
+        old = ui.button("Old", lambda: None)
+        ui.clear()
+        new = ui.button("New", lambda: calls.append(True))
+        ui._event(old.id, "tap", "")
+        self.assertEqual(calls, [])
+        self.assertNotEqual(old.id, new.id)
+
+    def test_callback_input_and_overlapping_tap(self):
+        calls = []
+        def callback():
+            calls.append(input("From button?"))
+        button = ui.button("Input", callback)
+        event = json.dumps({"id": button.id, "kind": "tap"})
+        runner.send_event(event)
+        try:
+            wait_until(lambda: runner._prompt[0] is not None)
+            state = json.loads(runner.get_state())
+            self.assertEqual(state["prompt"], "From button?")
+            self.assertTrue(state["running"])
+            runner.send_event(event)
+            runner.run_code("print('must not run')")
+            runner.input_reply(json.dumps({"prompt_id": state["prompt_id"], "text": "answer"}))
+            wait_until(lambda: not runner._callback_running[0])
+            self.assertEqual(calls, ["answer"])
+            output = runner.take_output()
+            self.assertIn("Already running", output)
+            self.assertNotIn("must not run", output)
+        finally:
+            if runner._prompt[0] is not None:
+                runner.input_reply(json.dumps({"prompt_id": runner._prompt_id[0], "text": ""}))
+            wait_until(lambda: not runner._callback_running[0])
+
+    def test_reinstall_with_existing_archive_is_importable(self):
+        incoming, archived, installed = runner._package_folders()
+        name = "archive_probe-1.0-py3-none-any.whl"
+        (archived / name).write_bytes(b"old archive")
+        with zipfile.ZipFile(incoming / name, "w") as wheel:
+            wheel.writestr("archive_probe.py", "VALUE = 42\n")
+            wheel.writestr("archive_probe-1.0.dist-info/WHEEL", "Wheel-Version: 1.0\n")
+        runner._process_dropped_packages()
+        self.assertEqual(importlib.import_module("archive_probe").VALUE, 42)
+
+    def test_oversized_wheel_rejected_before_decompression(self):
+        incoming, _, installed = runner._package_folders()
+        path = incoming / "large-1.0-py3-none-any.whl"
+        info = zipfile.ZipInfo("large.py")
+        info.file_size = 51 * 1024 * 1024
+        with mock.patch.object(runner.zipfile, "ZipFile") as archive:
+            opened = archive.return_value.__enter__.return_value
+            opened.infolist.return_value = [info]
+            opened.testzip.return_value = None
+            with self.assertRaisesRegex(ValueError, "50 MB"):
+                runner._install_wheel(path, installed)
+            opened.testzip.assert_not_called()
+
+
+if __name__ == "__main__":
+    result = unittest.TextTestRunner(stream=CONSOLE, verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(Regressions))
+    os.chdir(ROOT)
+    DOCUMENTS.cleanup()
+    sys.exit(not result.wasSuccessful())

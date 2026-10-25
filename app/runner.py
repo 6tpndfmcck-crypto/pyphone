@@ -1,5 +1,7 @@
 import sys, json, traceback, threading, builtins, os, shutil, tempfile, zipfile, urllib.request, urllib.parse, shlex, ssl, difflib
 from pathlib import Path
+import importlib
+import linecache
 
 # Load datetime on the interpreter's main thread before user code or native
 # packages (such as NumPy) request its C API from a worker thread.
@@ -87,9 +89,6 @@ def _install_wheel(wheel_path, installed_root):
         return False
 
     with zipfile.ZipFile(wheel_path, "r") as archive:
-        bad = archive.testzip()
-        if bad:
-            raise ValueError("The wheel archive is damaged.")
         entries = archive.infolist()
         if sum(entry.file_size for entry in entries) > 50 * 1024 * 1024:
             raise ValueError("Package expands beyond the 50 MB safety limit.")
@@ -104,6 +103,9 @@ def _install_wheel(wheel_path, installed_root):
         if not any(name.endswith(".dist-info/WHEEL") for name in archive.namelist()):
             raise ValueError("The ZIP doesn't contain wheel metadata.")
 
+        # Check limits and paths before decompressing the archive for CRC checks.
+        if archive.testzip():
+            raise ValueError("The wheel archive is damaged.")
         installed_root.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(prefix="pyphone-wheel-", dir=str(installed_root)) as temp:
             staging = Path(temp) / "package"
@@ -137,7 +139,7 @@ def _install_wheel(wheel_path, installed_root):
 def _pip_install_command(code):
     """Handle a standalone 'pip install ...' line in the editor without a shell."""
     stripped = code.strip()
-    if "\\n" in stripped or not stripped.startswith("pip install "):
+    if "\n" in stripped or "\r" in stripped or not stripped.startswith("pip install "):
         return False
 
     try:
@@ -182,8 +184,9 @@ def _pip_install_command(code):
             archive_path = archived / (wheel_path.stem + "-copy" + wheel_path.suffix)
         shutil.move(str(wheel_path), str(archive_path))
         if did_install:
-            install_folder = installed / _wheel_install_target(archive_path.name)
+            install_folder = installed / _wheel_install_target(wheel_path.name)
             sys.path.insert(0, str(install_folder))
+            importlib.invalidate_caches()
             print("Successfully installed", metadata.get("info", {}).get("name", package_name), metadata.get("info", {}).get("version", version if "version" in locals() else ""))
         else:
             print("Package is already installed.")
@@ -215,9 +218,10 @@ def _process_dropped_packages():
                 destination = archived / (wheel.stem + "-copy" + wheel.suffix)
             shutil.move(str(wheel), str(destination))
             if did_install:
-                install_folder = installed / _wheel_install_target(destination.name)
+                install_folder = installed / _wheel_install_target(wheel.name)
                 if install_folder.is_dir():
                     sys.path.insert(0, str(install_folder))
+                    importlib.invalidate_caches()
                 print("Installed package:", destination.name)
         except Exception as exc:
             print("Couldn't install", wheel.name + ":", str(exc))
@@ -263,6 +267,9 @@ _run_tid = [0]
 _run_lock = threading.RLock()
 _running = [False]
 _cb_tid = [0]
+_callback_running = [False]
+_input_lock = threading.Lock()
+_prompt_id = [0]
 _prompt = [None]
 _reply = [""]
 _got = threading.Event()
@@ -270,16 +277,19 @@ _got = threading.Event()
 
 def _input(prompt=""):
     prompt = str(prompt)
-    _reply[0] = ""
-    _got.clear()
-    _prompt[0] = prompt
-    ui._seq[0] += 1
+    with _input_lock:
+        _reply[0] = ""
+        _got.clear()
+        _prompt_id[0] += 1
+        _prompt[0] = prompt
+        ui._seq[0] += 1
     try:
         while not _got.wait(0.1):
             pass
         text = _reply[0]
     finally:
-        _prompt[0] = None
+        with _input_lock:
+            _prompt[0] = None
     print(prompt + text)
     return text
 
@@ -373,8 +383,9 @@ def _show_friendly_error(exc, tb=None):
         green = Fore.GREEN
         cyan = Fore.CYAN
         reset = Style.RESET_ALL
+        bright = Style.BRIGHT
     except Exception:
-        red = yellow = green = cyan = reset = ""
+        red = yellow = green = cyan = reset = bright = ""
 
     kind = type(exc).__name__
     explanation, fix = _ERROR_HELP.get(
@@ -395,19 +406,19 @@ def _show_friendly_error(exc, tb=None):
         except Exception:
             pass
 
-    # Make common misspelled variable errors more actionable.
-    if kind == "NameError":
-        import re
-        match = re.search(r"name ['\"]([^'\"]+)['\"] is not defined", str(exc))
-        if match and source:
-            missing = match.group(1)
-            candidates = re.findall(r"\b[A-Za-z_]\w*\b", source)
-            close = difflib.get_close_matches(missing, candidates, n=1, cutoff=0.65)
-            if close:
-                fix = "Did you mean '" + close[0] + "'? Check the spelling of that variable."
+    # Suggest names actually available in the failing frame, never the typo itself.
+    if isinstance(exc, NameError) and getattr(exc, "name", None) and tb is not None:
+        frame = tb
+        while frame.tb_next is not None:
+            frame = frame.tb_next
+        missing = exc.name
+        candidates = set(frame.tb_frame.f_locals) | set(frame.tb_frame.f_globals) | set(vars(builtins))
+        close = difflib.get_close_matches(missing, candidates - {missing}, n=1, cutoff=0.65)
+        if close:
+            fix = "Did you mean '" + close[0] + "'? Check the spelling of that variable."
 
     print()
-    print(red + Style.BRIGHT + "ERROR" + reset + red + "  " + kind + reset)
+    print(red + bright + "ERROR" + reset + red + "  " + kind + reset)
     print(yellow + "WHAT HAPPENED" + reset)
     print(explanation)
     if line:
@@ -422,14 +433,16 @@ def _show_friendly_error(exc, tb=None):
     print()
 
 def _worker(code, started):
-    with _run_lock:
-        _run_tid[0] = threading.get_ident()
-    started.set()
     try:
+        with _run_lock:
+            _run_tid[0] = threading.get_ident()
+        started.set()
         # Make relative file paths use Documents/Files, which is writable
         # inside PyPhone's iOS container.
         os.chdir(_files_folder())
         if not _pip_install_command(code):
+            # Keep the source available for runtime tracebacks and callback errors.
+            linecache.cache["<code>"] = (len(code), None, code.splitlines(keepends=True), "<code>")
             exec(compile(code, "<code>", "exec"), {"__name__": "__main__"})
     except KeyboardInterrupt:
         print("Stopped.")
@@ -445,7 +458,7 @@ def run_code(code):
     # Reserve the runner before starting the worker. Otherwise, two rapid Run
     # taps can both observe a zero thread ID before either worker starts.
     with _run_lock:
-        if _running[0] or _cb_tid[0]:
+        if _running[0] or _callback_running[0]:
             print("Already running. Stop it first.")
             return ""
         _running[0] = True
@@ -472,39 +485,64 @@ def run_code(code):
     return ""
 
 
-def input_reply(text):
-    _reply[0] = text
-    _got.set()
+def input_reply(arg):
+    reply = json.loads(arg)
+    with _input_lock:
+        # Polls and duplicate submissions can arrive after the next input().
+        if (_prompt[0] is not None and not _got.is_set()
+                and reply["prompt_id"] == _prompt_id[0]):
+            _reply[0] = str(reply["text"])
+            _got.set()
     return ""
 
 
 def get_state(_=""):
+    with _input_lock:
+        prompt, prompt_id = _prompt[0], _prompt_id[0]
     tid = _run_tid[0] or _cb_tid[0]
     return json.dumps({
         "widgets": ui._state(),
-        "running": bool(_running[0] or _cb_tid[0]),
-        "prompt": _prompt[0],
+        "running": bool(_running[0] or _callback_running[0]),
+        "prompt": prompt,
+        "prompt_id": prompt_id,
         "tid": tid,
         "seq": ui._seq[0],
     })
 
 
-def send_event(arg):
-    d = json.loads(arg)
-    if d["kind"] == "tap":
+def _callback_worker(d):
+    try:
         with _run_lock:
             _cb_tid[0] = threading.get_ident()
-    try:
         ui._event(d["id"], d["kind"], d.get("value", ""))
     except KeyboardInterrupt:
         print("Stopped.")
     except BaseException as exc:
         _show_friendly_error(exc, exc.__traceback__)
     finally:
-        if d["kind"] == "tap":
+        with _run_lock:
+            _cb_tid[0] = 0
+            _callback_running[0] = False
+        ui._seq[0] += 1
+
+
+def send_event(arg):
+    d = json.loads(arg)
+    if d["kind"] == "tap":
+        with _run_lock:
+            if _running[0] or _callback_running[0]:
+                print("Already running. Wait for it to finish or tap Stop.")
+                return ""
+            _callback_running[0] = True
+        try:
+            threading.Thread(target=_callback_worker, args=(d,), daemon=True).start()
+        except BaseException:
             with _run_lock:
-                _cb_tid[0] = 0
-    ui._seq[0] += 1
+                _callback_running[0] = False
+            raise
+    else:
+        ui._event(d["id"], d["kind"], d.get("value", ""))
+        ui._seq[0] += 1
     return ""
 
 
@@ -513,3 +551,4 @@ def take_output(_=""):
         s = "".join(_out.buf)
         _out.buf.clear()
     return s
+
