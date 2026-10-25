@@ -42,12 +42,23 @@ struct CodeEditor: UIViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
-    func makeUIView(context: Context) -> UITextView {
+    func makeUIView(context: Context) -> UIView {
+        let container = UIView()
+        container.backgroundColor = .systemBackground
+
+        let gutter = UILabel()
+        gutter.font = UIFont.monospacedSystemFont(ofSize: 14, weight: .regular)
+        gutter.textColor = .tertiaryLabel
+        gutter.textAlignment = .right
+        gutter.numberOfLines = 0
+        gutter.backgroundColor = .secondarySystemBackground
+        gutter.translatesAutoresizingMaskIntoConstraints = false
+
         let tv = UITextView()
         tv.delegate = context.coordinator
         tv.font = UIFont.monospacedSystemFont(ofSize: 14, weight: .regular)
         tv.textColor = .label
-        tv.backgroundColor = .clear
+        tv.backgroundColor = .systemBackground
         tv.autocapitalizationType = .none
         tv.autocorrectionType = .no
         tv.spellCheckingType = .no
@@ -58,16 +69,36 @@ struct CodeEditor: UIViewRepresentable {
         tv.keyboardDismissMode = .interactive
         tv.textContainerInset = UIEdgeInsets(top: 8, left: 6, bottom: 8, right: 6)
         tv.text = text
+        tv.translatesAutoresizingMaskIntoConstraints = false
+
+        container.addSubview(gutter)
+        container.addSubview(tv)
+        NSLayoutConstraint.activate([
+            gutter.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            gutter.topAnchor.constraint(equalTo: container.topAnchor),
+            gutter.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            gutter.widthAnchor.constraint(equalToConstant: 34),
+            tv.leadingAnchor.constraint(equalTo: gutter.trailingAnchor),
+            tv.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            tv.topAnchor.constraint(equalTo: container.topAnchor),
+            tv.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+        ])
+
         context.coordinator.tv = tv
+        context.coordinator.gutter = gutter
         tv.inputAccessoryView = context.coordinator.makeBar()
+        context.coordinator.updateLineNumbers()
         context.coordinator.refresh()
-        return tv
+        return container
     }
 
-    func updateUIView(_ tv: UITextView, context: Context) {
+    func updateUIView(_ view: UIView, context: Context) {
         context.coordinator.parent = self
+        guard let tv = context.coordinator.tv else { return }
         if tv.text != text {
             tv.text = text
+            context.coordinator.applyHighlighting()
+            context.coordinator.updateLineNumbers()
             context.coordinator.refresh()
         }
     }
@@ -81,6 +112,7 @@ struct CodeEditor: UIViewRepresentable {
     final class Coordinator: NSObject, UITextViewDelegate {
         var parent: CodeEditor
         weak var tv: UITextView?
+        weak var gutter: UILabel?
         private let scroll = UIScrollView()
         private let stack = UIStackView()
 
@@ -88,11 +120,58 @@ struct CodeEditor: UIViewRepresentable {
 
         func textViewDidChange(_ textView: UITextView) {
             parent.text = textView.text
+            applyHighlighting()
+            updateLineNumbers()
             refresh()
         }
 
         func textViewDidChangeSelection(_ textView: UITextView) {
             refresh()
+        }
+
+        func scrollViewDidScroll(_ scrollView: UIScrollView) {
+            guard let tv = tv, scrollView === tv else { return }
+            gutter?.transform = CGAffineTransform(translationX: 0, y: -tv.contentOffset.y)
+        }
+
+        // MARK: Syntax highlighting and line numbers
+
+        func updateLineNumbers() {
+            guard let tv = tv, let gutter = gutter else { return }
+            let count = max(1, tv.text.components(separatedBy: "\\n").count)
+            gutter.text = (1...count).map(String.init).joined(separator: "\\n")
+            gutter.textContainerInset = UIEdgeInsets(top: 8, left: 0, bottom: 8, right: 7)
+            gutter.transform = CGAffineTransform(translationX: 0, y: -tv.contentOffset.y)
+        }
+
+        func applyHighlighting() {
+            guard let tv = tv else { return }
+            let source = tv.text ?? ""
+            let ns = source as NSString
+            let full = NSRange(location: 0, length: ns.length)
+            let selection = tv.selectedRange
+            let font = UIFont.monospacedSystemFont(ofSize: 14, weight: .regular)
+            let storage = tv.textStorage
+
+            storage.beginEditing()
+            storage.setAttributes([.font: font, .foregroundColor: UIColor.label], range: full)
+
+            func paint(_ pattern: String, _ color: UIColor, options: NSRegularExpression.Options = []) {
+                guard let regex = try? NSRegularExpression(pattern: pattern, options: options) else { return }
+                for match in regex.matches(in: source, range: full) {
+                    storage.addAttribute(.foregroundColor, value: color, range: match.range)
+                }
+            }
+
+            // Comments and quoted strings are highlighted before keywords and numbers.
+            paint("#[^\\n]*", .systemGreen)
+            paint(#"(?s)(\"\"\".*?\"\"\"|''' .*? '''|\"(?:\\\\.|[^\"\\\\])*\"|'(?:\\\\.|[^'\\\\])*')"#.replacingOccurrences(of: "''' .*? '''", with: "'''.*?'''"), .systemRed)
+            paint(#"\\b(False|None|True|and|as|assert|async|await|break|class|continue|def|del|elif|else|except|finally|for|from|global|if|import|in|is|lambda|match|nonlocal|not|or|pass|raise|return|try|while|with|yield)\\b"#, .systemPurple)
+            paint(#"\\b[0-9]+(?:\\.[0-9]+)?\\b"#, .systemOrange)
+            paint(#"\\b(print|input|len|range|int|float|str|bool|list|dict|set|tuple|sum|min|max|round|abs|enumerate|zip|open|super|type|isinstance)\\b(?=\\s*\\()"#, .systemBlue)
+            storage.endEditing()
+            tv.selectedRange = NSRange(location: min(selection.location, ns.length), length: min(selection.length, max(0, ns.length - selection.location)))
+            tv.typingAttributes = [.font: font, .foregroundColor: UIColor.label]
         }
 
         // MARK: Suggestion bar
