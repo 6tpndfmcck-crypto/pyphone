@@ -99,21 +99,23 @@ struct ScriptsPane: View {
                         Button(action: importFile) { Label("Import", systemImage: "square.and.arrow.down") }
                     }.buttonStyle(.borderless).padding(.vertical, 4)
                     ForEach(store.scripts.filter { search.isEmpty || $0.name.localizedCaseInsensitiveContains(search) }) { script in
-                        Button { if store.open(script.name) { openEditor() } } label: {
-                            HStack(spacing: 12) {
-                                Image(systemName: "doc.text").foregroundStyle(.primary).font(.title3)
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(script.name).foregroundStyle(.primary).font(.subheadline.weight(.medium))
-                                    Text(script.modified, style: .relative).font(.caption).foregroundStyle(.secondary)
-                                }
-                                Spacer()
-                                if script.name == store.name { Image(systemName: "checkmark.circle.fill").foregroundStyle(.primary) }
-                                Button(role: .destructive) { deleting = script } label: { Image(systemName: "trash").foregroundStyle(.secondary).frame(width: 36, height: 36) }
-                                    .buttonStyle(.borderless).accessibilityLabel("Delete \(script.name)")
-                            }.padding(.vertical, 3)
+                        HStack(spacing: 8) {
+                            Button { if store.open(script.name) { openEditor() } } label: {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "doc.text").foregroundStyle(.primary).font(.title3)
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(script.name).foregroundStyle(.primary).font(.subheadline.weight(.medium))
+                                        Text(script.modified, style: .relative).font(.caption).foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                    if script.name == store.name { Image(systemName: "checkmark.circle.fill").foregroundStyle(.primary) }
+                                }.padding(.vertical, 3)
+                            }.buttonStyle(.plain)
+                            Button(role: .destructive) { deleting = script } label: {
+                                Image(systemName: "trash").foregroundStyle(.secondary).frame(width: 44, height: 44)
+                            }.buttonStyle(.borderless).accessibilityLabel("Delete \(script.name)")
                         }
                         .swipeActions { Button(role: .destructive) { deleting = script } label: { Label("Delete", systemImage: "trash") } }
-                        .contextMenu { Button(role: .destructive) { deleting = script } label: { Label("Delete script", systemImage: "trash") } }
                     }
                 } header: { Text("Your scripts") }
                   footer: { Text("Saved automatically. Also available in Files → On My iPhone → PyPhone → Files.") }
