@@ -18,7 +18,7 @@ struct PyFile: FileDocument {
     }
 }
 
-enum WorkspaceTab: Hashable { case code, console, window, files }
+enum WorkspaceTab: Hashable { case code, console, files }
 
 struct ContentView: View {
     @StateObject private var runner = Runner()
@@ -45,13 +45,12 @@ struct ContentView: View {
                 editor.tabItem { Label("Code", systemImage: "chevron.left.forwardslash.chevron.right") }.tag(WorkspaceTab.code)
                 ConsolePane(runner: runner, fontSize: CGFloat(fontSize), goToError: canShowError ? goToError : nil)
                     .tabItem { Label("Console", systemImage: "terminal") }.tag(WorkspaceTab.console)
-                window.tabItem { Label("Window", systemImage: "rectangle.3.group") }.tag(WorkspaceTab.window)
                 ScriptsPane(store: scripts, openEditor: { tab = .code }, importFile: { showImporter = true },
                             openPackages: { showPackages = true })
                     .tabItem { Label("Files", systemImage: "folder") }.tag(WorkspaceTab.files)
             }
         }
-        .background(Color(.systemGroupedBackground)).tint(.teal)
+        .background(Color(.systemGroupedBackground)).tint(.primary)
         .preferredColorScheme(appearance == "system" ? nil : (appearance == "light" ? .light : .dark))
         .sheet(isPresented: $showSettings) { SettingsPane(runner: runner) }
         .sheet(isPresented: $showPackages) {
@@ -84,13 +83,13 @@ struct ContentView: View {
     private var header: some View {
         HStack(spacing: 10) {
             Image(systemName: "chevron.left.forwardslash.chevron.right")
-                .font(.system(size: 20, weight: .bold)).foregroundStyle(.teal)
-                .frame(width: 42, height: 42).background(Color.teal.opacity(0.12), in: RoundedRectangle(cornerRadius: 13))
+                .font(.system(size: 20, weight: .bold)).foregroundStyle(.primary)
+                .frame(width: 42, height: 42).background(Color.primary.opacity(0.12), in: RoundedRectangle(cornerRadius: 13))
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text("PyPhone").font(.title3.bold())
                     Text("2").font(.caption.bold()).padding(.horizontal, 6).padding(.vertical, 2)
-                        .background(Color.teal.opacity(0.16), in: Capsule()).foregroundStyle(.teal)
+                        .background(Color.primary.opacity(0.16), in: Capsule()).foregroundStyle(.primary)
                 }
                 Text(runner.executionStatus).font(.caption).foregroundStyle(.secondary).lineLimit(1)
             }
@@ -100,7 +99,7 @@ struct ContentView: View {
             Button(action: runOrStop) {
                 Label(runner.running ? "Stop" : "Run", systemImage: runner.running ? "stop.fill" : "play.fill")
                     .font(.subheadline.bold()).frame(minHeight: 28)
-            }.buttonStyle(.borderedProminent).tint(runner.running ? .orange : .teal)
+            }.buttonStyle(.borderedProminent).tint(runner.running ? .orange : .primary)
                 .disabled(!runner.ready).accessibilityIdentifier("runButton")
         }.padding(.horizontal, 16).padding(.vertical, 10)
     }
@@ -108,7 +107,7 @@ struct ContentView: View {
     private var editor: some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
-                Image(systemName: "doc.text").foregroundStyle(.teal)
+                Image(systemName: "doc.text").foregroundStyle(.primary)
                 Text(scripts.name).font(.subheadline.weight(.semibold)).lineLimit(1)
                 Spacer(minLength: 2)
                 Text(scripts.isSaved ? "Saved" : "Saving…").font(.caption2).foregroundStyle(.secondary)
@@ -119,6 +118,7 @@ struct ContentView: View {
                     Button { showImporter = true } label: { Label("Import from Files", systemImage: "square.and.arrow.down") }
                     Button { renameText = scripts.name; showRename = true } label: { Label("Rename", systemImage: "pencil") }
                     Button { scripts.duplicate() } label: { Label("Duplicate", systemImage: "doc.on.doc") }
+                    Button { showPackages = true } label: { Label("Install Python package", systemImage: "shippingbox") }
                     Button { scripts.save(); showExporter = true } label: { Label("Export .py file", systemImage: "square.and.arrow.up") }
                 } label: { Image(systemName: "ellipsis.circle").frame(width: 36, height: 40) }
                 .accessibilityLabel("Script actions")
@@ -129,6 +129,11 @@ struct ContentView: View {
                            fontSize: CGFloat(fontSize), autoIndent: autoIndent, findRequest: findRequest,
                            lineRequest: lineRequest, targetLine: targetLine)
                     .id(scripts.name).frame(width: viewport.size.width, height: viewport.size.height)
+            }
+            if !runner.widgets.isEmpty {
+                Divider()
+                window
+                    .frame(minHeight: 140, maxHeight: 300)
             }
             Divider()
             HStack {
@@ -146,7 +151,7 @@ struct ContentView: View {
         Group {
             if runner.widgets.isEmpty {
                 VStack(spacing: 16) {
-                    Image(systemName: "rectangle.3.group").font(.system(size: 42)).foregroundStyle(.teal)
+                    Image(systemName: "rectangle.3.group").font(.system(size: 42)).foregroundStyle(.primary)
                     Text("Your program's window").font(.title2.bold())
                     Text("Labels, buttons, and images from ui appear here.").foregroundStyle(.secondary).multilineTextAlignment(.center)
                     Button("Try the window example") {
