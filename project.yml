@@ -34,8 +34,8 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.example.pyphone
-        MARKETING_VERSION: "1.0"
-        CURRENT_PROJECT_VERSION: "1"
+        MARKETING_VERSION: "2.0.0"
+        CURRENT_PROJECT_VERSION: "200"
         GENERATE_INFOPLIST_FILE: NO
         SWIFT_VERSION: "5.0"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
@@ -45,3 +45,4 @@ targets:
       - name: Install Python standard library
         script: bash "$SRCROOT/scripts/install_python.sh"
         basedOnDependencyAnalysis: false
+

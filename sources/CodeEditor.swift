@@ -107,6 +107,11 @@ final class EditorTextView: UITextView {
 
 struct CodeEditor: UIViewRepresentable {
     @Binding var text: String
+    var fontSize: CGFloat = 14
+    var autoIndent = true
+    var findRequest = 0
+    var lineRequest = 0
+    var targetLine = 1
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -127,7 +132,7 @@ struct CodeEditor: UIViewRepresentable {
         gutter.isUserInteractionEnabled = false
         tv.addSubview(gutter)
         tv.delegate = context.coordinator
-        tv.font = UIFont.monospacedSystemFont(ofSize: 14, weight: .regular)
+        tv.font = UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
         tv.textColor = .label
         tv.backgroundColor = .systemBackground
         tv.autocapitalizationType = .none
@@ -137,6 +142,8 @@ struct CodeEditor: UIViewRepresentable {
         tv.smartDashesType = .no
         tv.smartInsertDeleteType = .no
         tv.isScrollEnabled = true
+        tv.isFindInteractionEnabled = true
+        tv.accessibilityIdentifier = "codeEditor"
         tv.showsVerticalScrollIndicator = true
         tv.alwaysBounceVertical = true
         tv.keyboardDismissMode = .interactive
@@ -148,17 +155,30 @@ struct CodeEditor: UIViewRepresentable {
         context.coordinator.applyHighlighting()
         context.coordinator.updateLineNumbers()
         context.coordinator.refresh()
+        context.coordinator.lastFindRequest = findRequest
+        if lineRequest > 0 {
+            DispatchQueue.main.async { context.coordinator.jumpToLine() }
+        }
+        context.coordinator.lastLineRequest = lineRequest
         return tv
     }
 
     func updateUIView(_ view: EditorTextView, context: Context) {
         context.coordinator.parent = self
         guard let tv = context.coordinator.tv else { return }
-        if tv.text != text {
+        if tv.text != text || tv.font?.pointSize != fontSize {
             tv.text = text
             context.coordinator.applyHighlighting()
             context.coordinator.updateLineNumbers()
             context.coordinator.refresh()
+        }
+        if context.coordinator.lastFindRequest != findRequest {
+            context.coordinator.lastFindRequest = findRequest
+            tv.findInteraction?.presentFindNavigator(showingReplace: true)
+        }
+        if context.coordinator.lastLineRequest != lineRequest {
+            context.coordinator.lastLineRequest = lineRequest
+            context.coordinator.jumpToLine()
         }
     }
 
@@ -180,6 +200,8 @@ struct CodeEditor: UIViewRepresentable {
         weak var gutter: LineNumberGutter?
         private let scroll = UIScrollView()
         private let stack = UIStackView()
+        var lastFindRequest = 0
+        var lastLineRequest = 0
 
         init(_ parent: CodeEditor) { self.parent = parent }
 
@@ -194,6 +216,35 @@ struct CodeEditor: UIViewRepresentable {
             refresh()
         }
 
+        func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText replacement: String) -> Bool {
+            guard parent.autoIndent, replacement == "\n", textView.markedTextRange == nil else { return true }
+            let source = (textView.text ?? "") as NSString
+            guard range.location <= source.length else { return true }
+            let preceding = source.substring(to: range.location)
+            let line = preceding.components(separatedBy: "\n").last ?? ""
+            let indent = PythonIndentation.continuation(for: line)
+            guard !indent.isEmpty, let start = textView.position(from: textView.beginningOfDocument, offset: range.location),
+                  let end = textView.position(from: start, offset: range.length),
+                  let selection = textView.textRange(from: start, to: end) else { return true }
+            textView.replace(selection, withText: "\n" + indent)
+            textViewDidChange(textView)
+            return false
+        }
+
+        func jumpToLine() {
+            guard let tv = tv else { return }
+            gutter?.updateLines()
+            let starts = tv.gutter.lineStarts
+            let index = min(max(parent.targetLine - 1, 0), starts.count - 1)
+            let location = starts[index]
+            let source = (tv.text ?? "") as NSString
+            let range = source.lineRange(for: NSRange(location: location, length: 0))
+            tv.selectedRange = range
+            tv.layoutManager.ensureLayout(for: tv.textContainer)
+            tv.scrollRangeToVisible(range)
+            UIAccessibility.post(notification: .announcement, argument: "Line \(index + 1)")
+        }
+
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
             guard let tv = tv, scrollView === tv else { return }
             gutter?.setNeedsDisplay()
@@ -206,7 +257,7 @@ struct CodeEditor: UIViewRepresentable {
             gutter.updateLines()
             // Leave enough room when source line numbers reach four digits.
             let digits = String(gutter.lineStarts.count).count
-            let width = max(34, CGFloat(digits) * 9 + 10)
+            let width = max(34, CGFloat(digits) * parent.fontSize * 0.65 + 12)
             if tv?.gutterWidth != width { tv?.gutterWidth = width }
         }
 
@@ -217,7 +268,7 @@ struct CodeEditor: UIViewRepresentable {
             let full = NSRange(location: 0, length: ns.length)
             let selection = tv.selectedRange
             let offset = tv.contentOffset
-            let font = UIFont.monospacedSystemFont(ofSize: 14, weight: .regular)
+            let font = UIFont.monospacedSystemFont(ofSize: parent.fontSize, weight: .regular)
             let storage = tv.textStorage
 
             storage.beginEditing()
@@ -277,6 +328,15 @@ struct CodeEditor: UIViewRepresentable {
             let done = UIButton(configuration: pill("Done"), primaryAction: UIAction { [weak self] _ in
                 self?.tv?.resignFirstResponder()
             })
+            let undo = UIButton(configuration: pill("↶"), primaryAction: UIAction { [weak self] _ in
+                self?.tv?.undoManager?.undo()
+            })
+            undo.accessibilityLabel = "Undo"
+            let redo = UIButton(configuration: pill("↷"), primaryAction: UIAction { [weak self] _ in
+                self?.tv?.undoManager?.redo()
+            })
+            redo.accessibilityLabel = "Redo"
+            tab.accessibilityLabel = "Indent four spaces"
             for b in [tab, done] {
                 b.setContentHuggingPriority(.required, for: .horizontal)
                 b.setContentCompressionResistancePriority(.required, for: .horizontal)
@@ -297,7 +357,7 @@ struct CodeEditor: UIViewRepresentable {
             ])
             scroll.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
-            let row = UIStackView(arrangedSubviews: [tab, scroll, done])
+            let row = UIStackView(arrangedSubviews: [undo, redo, tab, scroll, done])
             row.axis = .horizontal
             row.spacing = 6
             row.alignment = .fill
@@ -414,4 +474,5 @@ struct CodeEditor: UIViewRepresentable {
         }
     }
 }
+
 

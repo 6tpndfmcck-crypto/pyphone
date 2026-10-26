@@ -203,6 +203,7 @@ jobs:
             -sdk iphoneos \
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
             build 2>&1 | tee xcodebuild.log
           test -d "build/Build/Products/Release-iphoneos/PyPhone.app"
 
@@ -214,6 +215,7 @@ jobs:
           test -d "$APP_PATH"
           test -f "$APP_PATH/Info.plist"
           plutil -lint "$APP_PATH/Info.plist"
+          test "$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$APP_PATH/Info.plist")" = "2.0.0"
           test -f "$APP_PATH/Frameworks/SDL2.framework/SDL2" || {
             echo "SDL2.framework was not embedded in PyPhone.app"
             find "$APP_PATH/Frameworks" -maxdepth 2 -iname '*sdl*' -print
@@ -305,4 +307,5 @@ jobs:
           path: artifacts/
           if-no-files-found: error
           retention-days: 14
+
 

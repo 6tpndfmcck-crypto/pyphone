@@ -51,7 +51,7 @@ jobs:
         run: |
           if ! command -v xcodegen >/dev/null 2>&1; then brew install xcodegen; fi
           xcodegen generate --spec scrolling-tests.yml
-      - name: Test editor scrolling and terminal follow behavior
+      - name: Test workspace, saved scripts, editor, and console
         shell: bash
         run: |
           set -euo pipefail
@@ -67,4 +67,19 @@ jobs:
           )"
           xcodebuild test -project ScrollingChecks.xcodeproj -scheme ScrollingChecks \
             -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
+            -resultBundlePath "$RUNNER_TEMP/PyPhone-UI.xcresult" \
             -parallel-testing-enabled NO CODE_SIGNING_ALLOWED=NO
+      - name: Export UI screenshots
+        if: always()
+        run: |
+          if [ -d "$RUNNER_TEMP/PyPhone-UI.xcresult" ]; then
+            xcrun xcresulttool export attachments --path "$RUNNER_TEMP/PyPhone-UI.xcresult" --output-path "$RUNNER_TEMP/pyphone-screenshots"
+          fi
+      - name: Upload UI screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pyphone-v2-ui
+          path: ${{ runner.temp }}/pyphone-screenshots/
+          if-no-files-found: ignore
+

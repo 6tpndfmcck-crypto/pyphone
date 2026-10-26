@@ -16,6 +16,13 @@ struct PyState: Decodable {
     let prompt_id: Int
     let tid: Int
     let seq: Int
+    let error_line: Int?
+}
+
+struct PythonPackage: Identifiable, Decodable {
+    var id: String { name.lowercased() }
+    let name: String
+    let version: String
 }
 
 final class Runner: ObservableObject {
@@ -24,6 +31,21 @@ final class Runner: ObservableObject {
     @Published var status = "Starting Python…"
     @Published var running = false
     @Published var prompt: String? = nil
+    @Published private(set) var inputRequestID = 0
+    @Published private(set) var errorLine: Int?
+    @Published private(set) var lastDuration: TimeInterval?
+    @Published private(set) var runName = ""
+    @Published private(set) var packages: [PythonPackage] = []
+    private(set) var runSource = ""
+    private var startedAt: Date?
+
+    var executionStatus: String {
+        if !ready { return status }
+        if prompt != nil { return "Waiting for input" }
+        if running { return "Running…" }
+        if errorLine != nil { return "Check the console" }
+        return lastDuration == nil ? "Ready to code" : "Finished"
+    }
 
     private(set) var ready = false
     private var pending = 0
@@ -69,11 +91,17 @@ final class Runner: ObservableObject {
         }
     }
 
-    func run(_ code: String) {
+    func run(_ code: String, name: String = "Script") {
         // Keep the Run button from queueing duplicate programs before the first
         // state poll returns from Python.
         guard ready, !running else { return }
         output = ""
+        prompt = nil
+        errorLine = nil
+        lastDuration = nil
+        startedAt = Date()
+        runName = name
+        runSource = code
         running = true
         tid = 0
         stopRequested = false
@@ -112,6 +140,17 @@ final class Runner: ObservableObject {
 
     func tap(_ id: Int) { send(id, "tap", "") }
 
+    func clearOutput() { output = "" }
+
+    func refreshPackages() {
+        guard ready else { return }
+        pythonQueue.async { [weak self] in
+            let result = PythonBridge.call("list_packages", arg: "")
+            guard let packages = try? JSONDecoder().decode([PythonPackage].self, from: Data(result.utf8)) else { return }
+            DispatchQueue.main.async { self?.packages = packages }
+        }
+    }
+
     func setText(_ id: Int, _ text: String) {
         if let i = widgets.firstIndex(where: { $0.id == id }) { widgets[i].text = text }
         send(id, "change", text)
@@ -125,6 +164,9 @@ final class Runner: ObservableObject {
               let json = String(data: data, encoding: .utf8) else { return }
         if kind == "tap" {
             running = true
+            errorLine = nil
+            lastDuration = nil
+            startedAt = Date()
             tid = 0
             stopRequested = false
         }
@@ -156,7 +198,9 @@ final class Runner: ObservableObject {
 
     private func finish(_ st: PyState?, extra: String, fromEvent: Bool) {
         if fromEvent { pending -= 1 }
-        output += extra
+        if !extra.isEmpty {
+            output = ConsoleBuffer.appending(extra, to: output)
+        }
         guard let st = st else { return }
         if pending == 0 {
             running = st.running
@@ -166,7 +210,13 @@ final class Runner: ObservableObject {
         // A new input can start before a poll ever sees the old prompt clear.
         // Compare request IDs, including when both prompts have identical text.
         promptID = st.prompt_id
+        inputRequestID = st.prompt_id
         prompt = st.prompt_id == submittedPromptID ? nil : st.prompt
+        errorLine = st.error_line
+        if !running, let start = startedAt {
+            lastDuration = Date().timeIntervalSince(start)
+            startedAt = nil
+        }
         tid = st.tid
         if stopRequested {
             if tid != 0 {
@@ -183,4 +233,5 @@ final class Runner: ObservableObject {
         }
     }
 }
+
 

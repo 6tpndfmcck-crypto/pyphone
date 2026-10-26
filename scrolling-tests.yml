@@ -13,7 +13,17 @@ targets:
     sources:
       - sources/CodeEditor.swift
       - sources/TerminalView.swift
+      - sources/ANSIConsoleRenderer.swift
+      - sources/ConsoleBuffer.swift
+      - sources/PythonIndentation.swift
+      - sources/ScriptStore.swift
+      - sources/Examples.swift
+      - sources/ContentView.swift
+      - sources/WorkspacePanes.swift
+      - sources/Runner.swift
       - tests/ScrollingTests.swift
+      - tests/WorkspaceTests.swift
+      - tests/PythonBridgeStub.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.pyphone.scrolling-tests
@@ -25,3 +35,4 @@ schemes:
     test:
       targets:
         - ScrollingChecks
+

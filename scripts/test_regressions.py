@@ -43,6 +43,50 @@ class Regressions(unittest.TestCase):
         self.assertIn("WHAT HAPPENED", output)
         self.assertIn("HOW TO FIX IT", output)
 
+    def test_flood_output_is_bounded_and_keeps_latest_text(self):
+        stream = runner._Out()
+        self.assertEqual(stream.write("x" * 500_000), 500_000)
+        for _ in range(30_000):
+            stream.write("line\n")
+        stream.write("latest\n")
+        self.assertLessEqual(stream.size, stream.MAX_PENDING)
+        self.assertTrue(stream.trimmed)
+        self.assertTrue("".join(stream.buf).endswith("latest\n"))
+
+    def test_error_line_resets_for_next_run(self):
+        runner.run_code("x = 1\nprint(missing)\n")
+        wait_until(lambda: not runner._running[0])
+        self.assertEqual(json.loads(runner.get_state())["error_line"], 2)
+        runner.run_code("print('fixed')")
+        wait_until(lambda: not runner._running[0])
+        self.assertIsNone(json.loads(runner.get_state())["error_line"])
+
+    def test_many_identical_inputs_and_empty_answers(self):
+        runner.run_code("answers = [input('Answer: ') for _ in range(20)]\nprint(repr(answers))")
+        previous = -1
+        try:
+            for index in range(20):
+                wait_until(lambda: runner._prompt[0] is not None and runner._prompt_id[0] != previous)
+                previous = runner._prompt_id[0]
+                runner.input_reply(json.dumps({"prompt_id": previous, "text": "" if index % 2 else str(index)}))
+            wait_until(lambda: not runner._running[0])
+            self.assertIn("'18', ''", runner.take_output())
+        finally:
+            # Unblock a worker if an assertion fails before all inputs complete.
+            for _ in range(20):
+                if not runner._running[0]:
+                    break
+                if runner._prompt[0] is not None:
+                    runner.input_reply(json.dumps({"prompt_id": runner._prompt_id[0], "text": ""}))
+                time.sleep(0.02)
+
+    def test_package_list_uses_metadata_without_importing_packages(self):
+        class Distribution:
+            metadata = {"Name": "Test_Package"}
+            version = "1.2"
+        with mock.patch("importlib.metadata.distributions", return_value=[Distribution(), Distribution()]):
+            self.assertEqual(json.loads(runner.list_packages()), [{"name": "Test_Package", "version": "1.2"}])
+
     def test_runtime_error_shows_source_and_real_suggestion(self):
         runner.run_code("score = 10\nprint(socre)\n")
         wait_until(lambda: not runner._running[0])
@@ -165,3 +209,4 @@ if __name__ == "__main__":
     os.chdir(ROOT)
     DOCUMENTS.cleanup()
     sys.exit(not result.wasSuccessful())
+

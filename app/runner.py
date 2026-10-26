@@ -2,6 +2,7 @@ import sys, json, traceback, threading, builtins, os, shutil, tempfile, zipfile,
 from pathlib import Path
 import importlib
 import linecache
+from collections import deque
 
 # Load datetime on the interpreter's main thread before user code or native
 # packages (such as NumPy) request its C API from a worker thread.
@@ -19,14 +20,29 @@ _PYPI_SSL_CONTEXT = (
 
 
 class _Out:
+    MAX_PENDING = 200_000
+
     def __init__(self):
-        self.buf = []
+        self.buf = deque()
+        self.size = 0
+        self.trimmed = False
         self.lock = threading.Lock()
 
     def write(self, s):
+        original_length = len(s)
+        if not s:
+            return 0
         with self.lock:
+            if len(s) > self.MAX_PENDING:
+                s = s[-self.MAX_PENDING:]
+                self.trimmed = True
             self.buf.append(s)
-        return len(s)
+            self.size += len(s)
+            while self.size > self.MAX_PENDING:
+                removed = self.buf.popleft()
+                self.size -= len(removed)
+                self.trimmed = True
+        return original_length
 
     def flush(self):
         pass
@@ -270,6 +286,7 @@ _cb_tid = [0]
 _callback_running = [False]
 _input_lock = threading.Lock()
 _prompt_id = [0]
+_error_line = [None]
 _prompt = [None]
 _reply = [""]
 _got = threading.Event()
@@ -309,6 +326,18 @@ def check_runtime(_=""):
     if int(probe.sum()) != 6:
         raise RuntimeError("NumPy failed its smoke test")
     return "Python ready · NumPy " + str(numpy.__version__)
+
+
+def list_packages(_=""):
+    """Report installed distributions without importing or running packages."""
+    from importlib.metadata import distributions
+    packages = {}
+    for distribution in distributions():
+        name = distribution.metadata.get("Name")
+        if name:
+            key = name.lower().replace("_", "-")
+            packages.setdefault(key, {"name": name, "version": distribution.version})
+    return json.dumps([packages[key] for key in sorted(packages)])
 
 
 
@@ -406,6 +435,8 @@ def _show_friendly_error(exc, tb=None):
         except Exception:
             pass
 
+    _error_line[0] = line
+
     # Suggest names actually available in the failing frame, never the typo itself.
     if isinstance(exc, NameError) and getattr(exc, "name", None) and tb is not None:
         frame = tb
@@ -462,6 +493,7 @@ def run_code(code):
             print("Already running. Stop it first.")
             return ""
         _running[0] = True
+        _error_line[0] = None
 
     ui._reset()
     started = threading.Event()
@@ -507,6 +539,7 @@ def get_state(_=""):
         "prompt_id": prompt_id,
         "tid": tid,
         "seq": ui._seq[0],
+        "error_line": _error_line[0],
     })
 
 
@@ -534,6 +567,7 @@ def send_event(arg):
                 print("Already running. Wait for it to finish or tap Stop.")
                 return ""
             _callback_running[0] = True
+            _error_line[0] = None
         try:
             threading.Thread(target=_callback_worker, args=(d,), daemon=True).start()
         except BaseException:
@@ -548,7 +582,10 @@ def send_event(arg):
 
 def take_output(_=""):
     with _out.lock:
-        s = "".join(_out.buf)
+        s = ("[Older output trimmed]\n" if _out.trimmed else "") + "".join(_out.buf)
         _out.buf.clear()
+        _out.size = 0
+        _out.trimmed = False
     return s
+
 

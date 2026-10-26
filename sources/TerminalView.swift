@@ -4,6 +4,9 @@ import UIKit
 final class TerminalTextView: UITextView {
     private(set) var followsOutput = true
     private var renderedOutput: String?
+    var consoleFontSize: CGFloat = 14 {
+        didSet { if oldValue != consoleFontSize { renderedOutput = nil } }
+    }
 
     var bottomOffset: CGFloat {
         max(-adjustedContentInset.top, contentSize.height - bounds.height + adjustedContentInset.bottom)
@@ -25,7 +28,7 @@ final class TerminalTextView: UITextView {
             followsOutput = true
         }
         renderedOutput = output
-        text = output.isEmpty ? "Terminal output appears here." : output
+        attributedText = ANSIConsoleRenderer.render(output.isEmpty ? "Console output appears here." : output, fontSize: consoleFontSize)
         layoutManager.ensureLayout(for: textContainer)
         layoutIfNeeded()
         if followsOutput && !isTracking && !isDragging && !isDecelerating {
@@ -42,6 +45,11 @@ final class TerminalTextView: UITextView {
         }
     }
 
+    func resumeFollowing() {
+        followsOutput = true
+        scrollToBottom()
+    }
+
     override func layoutSubviews() {
         super.layoutSubviews()
         // Also follow after resizing the terminal or showing the Window tab.
@@ -53,26 +61,37 @@ final class TerminalTextView: UITextView {
 
 struct TerminalView: UIViewRepresentable {
     let output: String
+    var fontSize: CGFloat = 14
+    var followRequest = 0
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeUIView(context: Context) -> TerminalTextView {
         let view = TerminalTextView(frame: .zero, textContainer: nil)
-        view.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
+        view.consoleFontSize = fontSize
+        view.font = .monospacedSystemFont(ofSize: fontSize, weight: .regular)
         view.textColor = .label
-        view.backgroundColor = .secondarySystemBackground
+        view.backgroundColor = .systemBackground
         view.isEditable = false
         view.isSelectable = true
         view.isScrollEnabled = true
+        view.isFindInteractionEnabled = true
+        view.accessibilityIdentifier = "consoleOutput"
         view.alwaysBounceVertical = true
         view.textContainerInset = UIEdgeInsets(top: 10, left: 5, bottom: 10, right: 5)
         view.delegate = context.coordinator
+        context.coordinator.lastFollowRequest = followRequest
         view.setOutput(output)
         return view
     }
 
     func updateUIView(_ view: TerminalTextView, context: Context) {
+        view.consoleFontSize = fontSize
         view.setOutput(output)
+        if context.coordinator.lastFollowRequest != followRequest {
+            context.coordinator.lastFollowRequest = followRequest
+            view.resumeFollowing()
+        }
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: TerminalTextView, context: Context) -> CGSize? {
@@ -81,6 +100,7 @@ struct TerminalView: UIViewRepresentable {
     }
 
     final class Coordinator: NSObject, UITextViewDelegate {
+        var lastFollowRequest = 0
         func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
             (scrollView as? TerminalTextView)?.pauseFollowing()
         }
@@ -99,3 +119,4 @@ struct TerminalView: UIViewRepresentable {
         }
     }
 }
+

@@ -56,7 +56,7 @@ require(python_widget_keys == swift_widget_keys,
 
 # Starter code must only import API functions exported from ui.py, and Swift
 # must have a rendering path for each widget kind produced by that module.
-starter_import = re.search(r"from ui import ([^\n]+)", content_swift)
+starter_import = re.search(r"from ui import ([^\n]+)", read("sources/Examples.swift"))
 require(starter_import is not None, "Starter example has no ui imports")
 starter_api = {item.strip() for item in starter_import.group(1).split(",")}
 ui_functions = set(re.findall(r"^def ([A-Za-z_]\w*)\s*\(", ui_py, re.MULTILINE))
@@ -88,3 +88,4 @@ require("pip==25.2" in requirements.splitlines(),
         "pip must remain pinned as a PyPhone dependency")
 
 print("PyPhone cross-file interface and build-resource checks passed.")
+
