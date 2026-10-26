@@ -12,7 +12,7 @@ struct ConsolePane: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Image(systemName: "terminal").foregroundStyle(.teal)
+                Image(systemName: "terminal").foregroundStyle(.primary)
                 Text(runner.runName.isEmpty ? "Console" : runner.runName).font(.subheadline.bold()).lineLimit(1)
                 Spacer()
                 if let duration = runner.lastDuration {
@@ -29,7 +29,7 @@ struct ConsolePane: View {
             Divider()
             if runner.output.isEmpty && !runner.running {
                 VStack(spacing: 12) {
-                    Image(systemName: "terminal").font(.system(size: 36)).foregroundStyle(.teal)
+                    Image(systemName: "terminal").font(.system(size: 36)).foregroundStyle(.primary)
                     Text("Ready for your next idea").font(.headline)
                     Text("Tap Run to see output here.").font(.subheadline).foregroundStyle(.secondary)
                 }.frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -44,7 +44,7 @@ struct ConsolePane: View {
                     Button("Go to line \(line)", action: action).foregroundStyle(.orange)
                 } else { Text(runner.executionStatus).foregroundStyle(.secondary).lineLimit(1) }
                 Spacer()
-                Button { followRequest += 1 } label: { Label("Latest", systemImage: "arrow.down.to.line") }
+
             }.font(.caption).padding(.horizontal, 14).padding(.vertical, 10)
             if let prompt = runner.prompt { inputBar(prompt) }
         }
@@ -70,7 +70,7 @@ struct ConsolePane: View {
                 Button(action: submit) { Image(systemName: "arrow.up.circle.fill").font(.title).frame(width: 44, height: 44) }
                     .accessibilityLabel("Send input")
             }
-        }.padding(14).background(Color.teal.opacity(0.09))
+        }.padding(14).background(Color.primary.opacity(0.09))
     }
     private func prepareInput() { input = ""; inputFocused = true; followRequest += 1 }
     private func submit() {
@@ -101,34 +101,22 @@ struct ScriptsPane: View {
                     ForEach(store.scripts.filter { search.isEmpty || $0.name.localizedCaseInsensitiveContains(search) }) { script in
                         Button { if store.open(script.name) { openEditor() } } label: {
                             HStack(spacing: 12) {
-                                Image(systemName: "doc.text").foregroundStyle(.teal).font(.title3)
+                                Image(systemName: "doc.text").foregroundStyle(.primary).font(.title3)
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(script.name).foregroundStyle(.primary).font(.subheadline.weight(.medium))
                                     Text(script.modified, style: .relative).font(.caption).foregroundStyle(.secondary)
                                 }
                                 Spacer()
-                                if script.name == store.name { Image(systemName: "checkmark.circle.fill").foregroundStyle(.teal) }
+                                if script.name == store.name { Image(systemName: "checkmark.circle.fill").foregroundStyle(.primary) }
+                                Button(role: .destructive) { deleting = script } label: { Image(systemName: "trash").foregroundStyle(.secondary).frame(width: 36, height: 36) }
+                                    .buttonStyle(.borderless).accessibilityLabel("Delete \(script.name)")
                             }.padding(.vertical, 3)
                         }
                         .swipeActions { Button(role: .destructive) { deleting = script } label: { Label("Delete", systemImage: "trash") } }
+                        .contextMenu { Button(role: .destructive) { deleting = script } label: { Label("Delete script", systemImage: "trash") } }
                     }
                 } header: { Text("Your scripts") }
                   footer: { Text("Saved automatically. Also available in Files → On My iPhone → PyPhone → Files.") }
-                Section("Start something") {
-                    ForEach(Starter.all) { example in
-                        Button {
-                            if store.create(name: example.name, text: example.code) { openEditor() }
-                        } label: {
-                            HStack(spacing: 12) {
-                                Image(systemName: example.symbol).frame(width: 26).foregroundStyle(.teal)
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(example.title).foregroundStyle(.primary)
-                                    Text(example.detail).font(.caption).foregroundStyle(.secondary)
-                                }
-                            }.padding(.vertical, 2)
-                        }
-                    }
-                }
                 Section { Button(action: openPackages) { Label("Python packages", systemImage: "shippingbox") } }
             }
             .listStyle(.insetGrouped).navigationTitle("Your workspace").navigationBarTitleDisplayMode(.inline)
@@ -159,18 +147,18 @@ struct SettingsPane: View {
                         Text("Dark").tag("dark"); Text("Light").tag("light"); Text("System").tag("system")
                     }
                     Stepper("Text size: \(Int(fontSize))", value: $fontSize, in: 11...24, step: 1)
-                    Text("print(\"Hello, PyPhone\")").font(.system(size: fontSize, design: .monospaced)).foregroundStyle(.teal)
+                    Text("print(\"Hello, PyPhone\")").font(.system(size: fontSize, design: .monospaced)).foregroundStyle(.primary)
                     Toggle("Automatic indentation", isOn: $autoIndent)
                 }
                 Section("Python") {
                     Label(runner.status, systemImage: runner.ready ? "checkmark.circle" : "clock")
                         .font(.subheadline).textSelection(.enabled)
-                    Text("Use Files → Python packages to install a pure-Python package without changing your script.")
+                    Text("Install packages from the Code actions menu or Files → Python packages.")
                         .font(.subheadline).foregroundStyle(.secondary)
                 }
                 Section("PyPhone 2") {
                     LabeledContent("Version", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "2.0.0")
-                    Text("Made for coding on your iPhone. Scripts autosave, input stays in the console, and your UI lives in Window.")
+                    Text("Made for coding on your iPhone. Scripts autosave, input stays in the console, and Python UI appears with your code.")
                         .font(.subheadline).foregroundStyle(.secondary)
                 }
             }.navigationTitle("Settings").navigationBarTitleDisplayMode(.inline)
