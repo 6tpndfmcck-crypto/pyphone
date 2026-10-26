@@ -21,6 +21,15 @@ final class WorkspaceTests: XCTestCase {
         try String(contentsOf: directory.appendingPathComponent(name), encoding: .utf8)
     }
 
+    @MainActor
+    private func find<T: UIView>(_ type: T.Type, in root: UIView) -> T? {
+        if let match = root as? T { return match }
+        for child in root.subviews {
+            if let match = find(type, in: child) { return match }
+        }
+        return nil
+    }
+
     func testMigrationKeepsOldDraftAndExistingFiles() throws {
         try "existing".write(to: directory.appendingPathComponent("script.py"), atomically: true, encoding: .utf8)
         defaults.set("print('v1 draft')", forKey: "code")
@@ -129,6 +138,10 @@ final class WorkspaceTests: XCTestCase {
         host.view.layoutIfNeeded()
         try await Task.sleep(nanoseconds: 400_000_000)
         host.view.layoutIfNeeded()
+        let editor = try XCTUnwrap(find(EditorTextView.self, in: host.view))
+        XCTAssertGreaterThan(editor.bounds.height, 300)
+        XCTAssertLessThan(editor.bounds.height, window.bounds.height)
+        XCTAssertFalse(editor.text.isEmpty)
         let screenshot = UIGraphicsImageRenderer(size: window.bounds.size).image { _ in
             window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
         }
@@ -137,5 +150,37 @@ final class WorkspaceTests: XCTestCase {
         attachment.lifetime = .keepAlways
         add(attachment)
         XCTAssertGreaterThan(host.view.bounds.height, 0)
+    }
+
+    @MainActor
+    func testConsoleShowsInlineInputAndColorOutput() async throws {
+        PythonBridge.setPromptState(#"{"widgets":[],"running":true,"prompt":"What's your name?","prompt_id":1,"tid":1,"seq":0,"error_line":null}"#)
+        defer { PythonBridge.setPromptState(nil) }
+        let runner = Runner()
+        let host = UIHostingController(rootView: ConsolePane(runner: runner, fontSize: 15))
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 414, height: 896))
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        host.view.frame = window.bounds
+        try await Task.sleep(nanoseconds: 300_000_000)
+        runner.output = "Welcome to PyPhone 2.\n\u{001B}[32mYour code is running.\u{001B}[0m\n"
+        runner.prompt = "What's your name?"
+        host.view.layoutIfNeeded()
+        // Let SwiftUI lay out the new inline input row.
+        try await Task.sleep(nanoseconds: 20_000_000)
+        host.view.layoutIfNeeded()
+        let input = try XCTUnwrap(find(UITextField.self, in: host.view))
+        XCTAssertEqual(input.accessibilityIdentifier, "consoleInput")
+        let terminal = try XCTUnwrap(find(TerminalTextView.self, in: host.view))
+        XCTAssertTrue(terminal.text.contains("Your code is running."))
+        XCTAssertFalse(terminal.text.contains("\u{001B}"))
+        let screenshot = UIGraphicsImageRenderer(size: window.bounds.size).image { _ in
+            window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
+        }
+        let attachment = XCTAttachment(image: screenshot)
+        attachment.name = "PyPhone-2-console"
+        attachment.lifetime = .keepAlways
+        add(attachment)
     }
 }

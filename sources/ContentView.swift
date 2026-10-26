@@ -78,6 +78,7 @@ struct ContentView: View {
             if phase == .active { scripts.reloadFromFiles() } else { scripts.save() }
         }
         .onChange(of: runner.prompt) { prompt in if prompt != nil { tab = .console } }
+        .onChange(of: scripts.name) { _ in lineRequest = 0; findRequest = 0; targetLine = 1 }
     }
 
     private var header: some View {

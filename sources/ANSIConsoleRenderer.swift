@@ -6,7 +6,7 @@ enum ANSIConsoleRenderer {
     static func render(_ source: String, fontSize: CGFloat) -> NSAttributedString {
         let result = NSMutableAttributedString(string: "")
         let ns = source as NSString
-        let regex = try! NSRegularExpression(pattern: "\u001B\\[([0-9;]*)([@-~])")
+        let regex = try! NSRegularExpression(pattern: "\u{001B}\\[([0-9;]*)([@-~])")
         var color = UIColor.label
         var background: UIColor?
         var bold = false
@@ -46,7 +46,7 @@ enum ANSIConsoleRenderer {
         // complete output snapshot instead of flashing a partial escape code.
         let remaining = ns.substring(from: position)
         let tail = remaining as NSString
-        let partial = tail.range(of: "\u001B", options: .backwards)
+        let partial = tail.range(of: "\u{001B}", options: .backwards)
         let count = partial.location == NSNotFound ? tail.length : partial.location
         append(NSRange(location: position, length: count))
         return result
