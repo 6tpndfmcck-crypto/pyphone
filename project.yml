@@ -24,6 +24,8 @@ targets:
       path: sources/Info.plist
       properties:
         CFBundleDisplayName: PyPhone
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         UILaunchScreen: {}
         UIFileSharingEnabled: true
         LSSupportsOpeningInPlace: true

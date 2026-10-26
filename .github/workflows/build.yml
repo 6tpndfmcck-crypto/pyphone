@@ -215,7 +215,9 @@ jobs:
           test -d "$APP_PATH"
           test -f "$APP_PATH/Info.plist"
           plutil -lint "$APP_PATH/Info.plist"
-          test "$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$APP_PATH/Info.plist")" = "2.0.0"
+          APP_VERSION="$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$APP_PATH/Info.plist")"
+          echo "Verifying PyPhone version: $APP_VERSION"
+          test "$APP_VERSION" = "2.0.0"
           test -f "$APP_PATH/Frameworks/SDL2.framework/SDL2" || {
             echo "SDL2.framework was not embedded in PyPhone.app"
             find "$APP_PATH/Frameworks" -maxdepth 2 -iname '*sdl*' -print
@@ -281,7 +283,6 @@ jobs:
           ls -lh PyPhone.ipa PyPhone_ipa.zip PyPhone_SHA256.txt
 
       - name: Stage and verify downloadable files
-        if: always()
         shell: bash
         run: |
           set -euo pipefail
@@ -300,12 +301,20 @@ jobs:
           unzip -Z1 artifacts/PyPhone_ipa.zip | grep -Fxq "PyPhone.ipa"
 
       - name: Upload PyPhone IPA artifact
-        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: pyphone
           path: artifacts/
           if-no-files-found: error
           retention-days: 14
+
+      - name: Upload failed build logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pyphone-build-logs
+          path: xcodebuild.log
+          if-no-files-found: ignore
+          retention-days: 7
 
 
