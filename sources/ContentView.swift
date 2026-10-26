@@ -86,11 +86,7 @@ struct ContentView: View {
                 .font(.system(size: 20, weight: .bold)).foregroundStyle(.primary)
                 .frame(width: 42, height: 42).background(Color.primary.opacity(0.12), in: RoundedRectangle(cornerRadius: 13))
             VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 6) {
-                    Text("PyPhone").font(.title3.bold())
-                    Text("2").font(.caption.bold()).padding(.horizontal, 6).padding(.vertical, 2)
-                        .background(Color.primary.opacity(0.16), in: Capsule()).foregroundStyle(.primary)
-                }
+                Text("PyPhone").font(.title3.bold())
                 Text(runner.executionStatus).font(.caption).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer(minLength: 4)
@@ -99,7 +95,11 @@ struct ContentView: View {
             Button(action: runOrStop) {
                 Label(runner.running ? "Stop" : "Run", systemImage: runner.running ? "stop.fill" : "play.fill")
                     .font(.subheadline.bold()).frame(minHeight: 28)
-            }.buttonStyle(.borderedProminent).tint(runner.running ? .orange : .primary)
+            }
+                .padding(.horizontal, 14).padding(.vertical, 8)
+                .foregroundStyle(Color(.systemBackground))
+                .background(Color.primary, in: RoundedRectangle(cornerRadius: 9))
+                .buttonStyle(.plain)
                 .disabled(!runner.ready).accessibilityIdentifier("runButton")
         }.padding(.horizontal, 16).padding(.vertical, 10)
     }
