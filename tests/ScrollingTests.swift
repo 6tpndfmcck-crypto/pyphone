@@ -68,12 +68,12 @@ final class ScrollingTests: XCTestCase {
         host.view.layoutIfNeeded()
         let terminal = try XCTUnwrap(find(TerminalTextView.self, in: host.view))
         let output = (1...100).map { "output \($0)\n" }.joined()
-        terminal.setOutput(output)
+        terminal.setOutput(output, images: [], imageRevision: 0)
         terminal.layoutIfNeeded()
         XCTAssertGreaterThan(terminal.bottomOffset, 0)
         XCTAssertEqual(terminal.contentOffset.y, terminal.bottomOffset, accuracy: 2)
 
-        terminal.setOutput(output + "new output\n")
+        terminal.setOutput(output + "new output\n", images: [], imageRevision: 0)
         terminal.layoutIfNeeded()
         XCTAssertEqual(terminal.contentOffset.y, terminal.bottomOffset, accuracy: 2)
 
@@ -82,22 +82,60 @@ final class ScrollingTests: XCTestCase {
         terminal.setContentOffset(CGPoint(x: 0, y: 80), animated: false)
         terminal.updateFollowPosition()
         XCTAssertFalse(terminal.followsOutput)
-        terminal.setOutput(output + "new output\nmore output\n")
+        terminal.setOutput(output + "new output\nmore output\n", images: [], imageRevision: 0)
         terminal.layoutIfNeeded()
         XCTAssertEqual(terminal.contentOffset.y, 80, accuracy: 2)
 
         terminal.scrollToBottom()
         terminal.updateFollowPosition()
         XCTAssertTrue(terminal.followsOutput)
-        terminal.setOutput(output + "last line\n")
+        terminal.setOutput(output + "last line\n", images: [], imageRevision: 0)
         terminal.layoutIfNeeded()
         XCTAssertEqual(terminal.contentOffset.y, terminal.bottomOffset, accuracy: 2)
 
         terminal.pauseFollowing()
-        terminal.setOutput("")
+        terminal.setOutput("", images: [], imageRevision: 0)
         XCTAssertTrue(terminal.followsOutput)
-        terminal.setOutput(output)
+        terminal.setOutput(output, images: [], imageRevision: 0)
         terminal.layoutIfNeeded()
         XCTAssertEqual(terminal.contentOffset.y, terminal.bottomOffset, accuracy: 2)
+    }
+
+    @MainActor
+    func testTerminalUpdatesInlineImagesThroughSwiftUI() async throws {
+        func imageWidget(size: CGSize) throws -> Widget {
+            let format = UIGraphicsImageRendererFormat()
+            format.scale = 1
+            let image = UIGraphicsImageRenderer(size: size, format: format).image { context in
+                UIColor.red.setFill()
+                context.fill(CGRect(origin: .zero, size: size))
+            }
+            return Widget(id: 7, kind: "image", text: "test image", placeholder: "",
+                          image_data: try XCTUnwrap(image.pngData()).base64EncodedString())
+        }
+
+        let host = UIHostingController(rootView: TerminalView(output: "before\n"))
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        host.view.frame = window.bounds
+        host.view.layoutIfNeeded()
+        let terminal = try XCTUnwrap(find(TerminalTextView.self, in: host.view))
+        let output = "before\n\u{001F}PYPHONE_IMAGE:7\u{001E}\nafter\n"
+
+        for revision in 1...2 {
+            let size = CGSize(width: CGFloat(revision * 10), height: 10)
+            host.rootView = TerminalView(output: output, images: [try imageWidget(size: size)], imageRevision: revision)
+            host.view.setNeedsLayout()
+            try await Task.sleep(nanoseconds: 100_000_000)
+            host.view.layoutIfNeeded()
+            // Reuse the native view to exercise updateUIView, including an
+            // image revision change with unchanged console text.
+            XCTAssertTrue(terminal === find(TerminalTextView.self, in: host.view))
+            XCTAssertEqual(terminal.attributedText.string, "before\n\u{FFFC}\nafter\n")
+            let attachment = try XCTUnwrap(terminal.attributedText.attribute(.attachment, at: 7, effectiveRange: nil) as? NSTextAttachment)
+            XCTAssertEqual(try XCTUnwrap(attachment.image).size, size)
+        }
     }
 }
