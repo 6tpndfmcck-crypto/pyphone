@@ -20,7 +20,9 @@ struct ConsolePane: View {
                 }
                 Menu {
                     Button {
-                        UIPasteboard.general.string = ANSIConsoleRenderer.render(runner.output, fontSize: fontSize).string
+                        let copy = runner.output.replacingOccurrences(
+                            of: "\u{001F}PYPHONE_IMAGE:[0-9]+\u{001E}", with: "[image]", options: .regularExpression)
+                        UIPasteboard.general.string = ANSIConsoleRenderer.render(copy, fontSize: fontSize).string
                     } label: { Label("Copy output", systemImage: "doc.on.doc") }.disabled(runner.output.isEmpty)
                     Button { runner.clearOutput() } label: { Label("Clear console", systemImage: "trash") }
                 } label: { Image(systemName: "ellipsis.circle").frame(width: 40, height: 44) }
@@ -35,7 +37,8 @@ struct ConsolePane: View {
                 }.frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 GeometryReader { viewport in
-                    TerminalView(output: runner.output, fontSize: fontSize, followRequest: followRequest)
+                    TerminalView(output: runner.output, images: runner.inlineImages, imageRevision: runner.imageRevision,
+                                 fontSize: fontSize, followRequest: followRequest)
                         .frame(width: viewport.size.width, height: viewport.size.height)
                 }
             }
