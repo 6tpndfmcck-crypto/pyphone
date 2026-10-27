@@ -1,3 +1,10 @@
+# Unreleased
+
+Scripts can import local helper modules and packages from the Files folder.
+Refresh import discovery before each run so newly added files are available
+without restarting, and retain the Files import path if a script changes its
+working directory. Added regression coverage and a multi-file example.
+
 # 2.0.0
 
 Revamped the native iPhone workspace with separate Code, Console, Window, and

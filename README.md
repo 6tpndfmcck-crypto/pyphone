@@ -97,6 +97,27 @@ When upgrading from v1, the existing editor draft migrates to a file. If an exte
 
 **Back up scripts before deleting the app.** Deleting an iOS app can remove its sandbox data.
 
+### Using multiple Python files
+
+Scripts can import helpers saved in the same Files folder. For example, save `helper.py`:
+
+```python
+def greet(name):
+    return f"Hello, {name}!"
+```
+
+Then run another script containing:
+
+```python
+from helper import greet
+
+print(greet("PyPhone"))
+```
+
+Package folders with an `__init__.py` are also supported when placed in Files through iOS Files. Newly added modules are available on the next run. Bundled modules and installed packages take precedence over local files with the same name.
+
+Python caches imported modules between runs. After editing an already imported helper, use `import helper; import importlib; importlib.reload(helper)` before accessing its updated functions, or restart the app.
+
 ## Python runtime and packages
 
 PyPhone uses **CPython 3.13** with an iOS-compatible runtime and NumPy. Standard Python features such as variables, functions, loops, exceptions, lists, and imports work subject to iOS restrictions.

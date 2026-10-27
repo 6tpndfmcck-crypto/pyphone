@@ -344,7 +344,7 @@ def list_packages(_=""):
 _ERROR_HELP = {
     "ModuleNotFoundError": (
         "Python couldn't find a package you're importing.",
-        "Install the missing package with `pip install package-name` if it supports PyPhone, or check the import name."
+        "Check the import name and save local helper scripts in Files. For third-party packages, use `pip install package-name` if they support PyPhone."
     ),
     "ImportError": (
         "Python found a package, but couldn't import something from it.",
@@ -468,9 +468,17 @@ def _worker(code, started):
         with _run_lock:
             _run_tid[0] = threading.get_ident()
         started.set()
-        # Make relative file paths use Documents/Files, which is writable
-        # inside PyPhone's iOS container.
-        os.chdir(_files_folder())
+        # The isolated embedded interpreter has no implicit current-directory
+        # import path. Use a stable absolute path so helpers remain importable
+        # even if user code changes directories. Keep bundled runtime modules
+        # and installed packages ahead of user files.
+        files = str(_files_folder().resolve())
+        os.chdir(files)
+        if files not in sys.path:
+            sys.path.append(files)
+        # Files may have been created/imported since the previous run, even
+        # within the filesystem's directory timestamp resolution.
+        importlib.invalidate_caches()
         if not _pip_install_command(code):
             # Keep the source available for runtime tracebacks and callback errors.
             linecache.cache["<code>"] = (len(code), None, code.splitlines(keepends=True), "<code>")
