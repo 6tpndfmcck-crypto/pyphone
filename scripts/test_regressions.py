@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Regression tests for input, callbacks, diagnostics, and package installation."""
 import builtins
+from contextlib import contextmanager
 import importlib
 import json
 import os
@@ -30,11 +31,71 @@ def wait_until(predicate):
         time.sleep(0.01)
 
 
+@contextmanager
+def local_scripts():
+    """Model the embedded runtime: no implicit cwd entry on sys.path."""
+    previous_directory = Path.cwd()
+    with tempfile.TemporaryDirectory(prefix="pyphone-local-") as documents:
+        folder = Path(documents).resolve() / "Files"
+        folder.mkdir()
+        paths = [path for path in sys.path if path not in ("", str(folder))]
+        with mock.patch.dict(os.environ, {"PYPHONE_DOCUMENTS": documents}), \
+                mock.patch.object(sys, "path", paths):
+            try:
+                yield folder
+            finally:
+                wait_until(lambda: not runner._running[0] and not runner._callback_running[0])
+                os.chdir(previous_directory)
+                sys.path_importer_cache.pop(str(folder), None)
+                for name in list(sys.modules):
+                    if name.startswith("_pyphone_local_"):
+                        del sys.modules[name]
+
+
 class Regressions(unittest.TestCase):
     def setUp(self):
         wait_until(lambda: not runner._running[0] and not runner._cb_tid[0])
         runner.take_output()
         ui.clear()
+
+    def test_import_sibling_script_after_working_directory_changes(self):
+        with local_scripts() as folder:
+            (folder / "_pyphone_local_helper.py").write_text("VALUE = 42\n", encoding="utf-8")
+            (folder / "nested").mkdir()
+            runner.run_code("import os\nos.chdir('nested')\nfrom _pyphone_local_helper import VALUE\nprint('nested:', VALUE)")
+            wait_until(lambda: not runner._running[0])
+            self.assertIn("nested: 42", runner.take_output())
+            for _ in range(2):
+                runner.run_code("from _pyphone_local_helper import VALUE\nprint('helper:', VALUE)")
+                wait_until(lambda: not runner._running[0])
+                self.assertIn("helper: 42", runner.take_output())
+                self.assertEqual(Path.cwd(), folder)
+            self.assertEqual(sys.path.count(str(folder)), 1)
+            self.assertLess(sys.path.index(str(ROOT / "app")), sys.path.index(str(folder)))
+
+    def test_import_local_package_with_relative_import(self):
+        with local_scripts() as folder:
+            package = folder / "_pyphone_local_package"
+            package.mkdir()
+            (package / "__init__.py").write_text("from .helper import VALUE\n", encoding="utf-8")
+            (package / "helper.py").write_text("VALUE = 'package ready'\n", encoding="utf-8")
+            runner.run_code("from _pyphone_local_package import VALUE\nprint(VALUE)")
+            wait_until(lambda: not runner._running[0])
+            self.assertIn("package ready", runner.take_output())
+
+    def test_import_new_script_invalidates_directory_cache(self):
+        with local_scripts() as folder:
+            runner.run_code("try:\n    import _pyphone_local_later\nexcept ModuleNotFoundError:\n    print('not yet')")
+            wait_until(lambda: not runner._running[0])
+            self.assertIn("not yet", runner.take_output())
+            timestamp = folder.stat()
+            (folder / "_pyphone_local_later.py").write_text("VALUE = 'new script ready'\n", encoding="utf-8")
+            # FileFinder caches directory contents by mtime. Simulate a Files
+            # edit within the same filesystem timestamp tick.
+            os.utime(folder, ns=(timestamp.st_atime_ns, timestamp.st_mtime_ns))
+            runner.run_code("from _pyphone_local_later import VALUE\nprint(VALUE)")
+            wait_until(lambda: not runner._running[0])
+            self.assertIn("new script ready", runner.take_output())
 
     def test_error_without_colorama(self):
         with mock.patch.dict(sys.modules, {"colorama": None}):
