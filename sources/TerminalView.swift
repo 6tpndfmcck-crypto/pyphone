@@ -128,7 +128,7 @@ struct TerminalView: UIViewRepresentable {
 
     func updateUIView(_ view: TerminalTextView, context: Context) {
         view.consoleFontSize = fontSize
-        view.setOutput(output)
+        view.setOutput(output, images: images, imageRevision: imageRevision)
         if context.coordinator.lastFollowRequest != followRequest {
             context.coordinator.lastFollowRequest = followRequest
             view.resumeFollowing()
