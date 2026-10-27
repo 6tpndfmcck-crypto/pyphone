@@ -27,6 +27,8 @@ struct PythonPackage: Identifiable, Decodable {
 
 final class Runner: ObservableObject {
     @Published var widgets: [Widget] = []
+    @Published private(set) var inlineImages: [Widget] = []
+    @Published private(set) var imageRevision = 0
     @Published var output = ""
     @Published var status = "Starting Python…"
     @Published var running = false
@@ -96,6 +98,8 @@ final class Runner: ObservableObject {
         // state poll returns from Python.
         guard ready, !running else { return }
         output = ""
+        inlineImages.removeAll()
+        imageRevision += 1
         prompt = nil
         errorLine = nil
         lastDuration = nil
@@ -140,7 +144,11 @@ final class Runner: ObservableObject {
 
     func tap(_ id: Int) { send(id, "tap", "") }
 
-    func clearOutput() { output = "" }
+    func clearOutput() {
+        output = ""
+        inlineImages.removeAll()
+        imageRevision += 1
+    }
 
     func refreshPackages() {
         guard ready else { return }
@@ -228,6 +236,24 @@ final class Runner: ObservableObject {
             }
         }
         if pending == 0 && st.seq >= lastSeq {
+            // Images already emitted stay visible in the console even if
+            // ui.clear() later removes the interactive window widgets.
+            for widget in st.widgets where widget.kind == "image" {
+                if let index = inlineImages.firstIndex(where: { $0.id == widget.id }) {
+                    if inlineImages[index].image_data != widget.image_data {
+                        inlineImages[index] = widget
+                        imageRevision += 1
+                    }
+                } else {
+                    inlineImages.append(widget)
+                    imageRevision += 1
+                }
+            }
+            // Limit retained image data to avoid runaway memory usage.
+            if inlineImages.count > 16 {
+                inlineImages.removeFirst(inlineImages.count - 16)
+                imageRevision += 1
+            }
             widgets = st.widgets
             lastSeq = st.seq
         }
