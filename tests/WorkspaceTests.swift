@@ -22,10 +22,10 @@ final class WorkspaceTests: XCTestCase {
     }
 
     @MainActor
-    private func find<T: UIView>(_ type: T.Type, in root: UIView) -> T? {
-        if let match = root as? T { return match }
+    private func find<T: UIView>(_ type: T.Type, in root: UIView, matching predicate: (T) -> Bool = { _ in true }) -> T? {
+        if let match = root as? T, predicate(match) { return match }
         for child in root.subviews {
-            if let match = find(type, in: child) { return match }
+            if let match = find(type, in: child, matching: predicate) { return match }
         }
         return nil
     }
@@ -170,8 +170,13 @@ final class WorkspaceTests: XCTestCase {
         // Let SwiftUI lay out the new inline input row.
         try await Task.sleep(nanoseconds: 20_000_000)
         host.view.layoutIfNeeded()
-        let input = try XCTUnwrap(find(UITextField.self, in: host.view))
-        XCTAssertEqual(input.accessibilityIdentifier, "consoleInput")
+        // SwiftUI may place its accessibility identifier on a wrapper, and
+        // UITextView's find interaction can contain other native text fields.
+        let input = try XCTUnwrap(find(UITextField.self, in: host.view, matching: {
+            $0.placeholder == "Type your answer…"
+        }))
+        XCTAssertTrue(input.isEnabled)
+        XCTAssertGreaterThan(input.bounds.width, 0)
         let terminal = try XCTUnwrap(find(TerminalTextView.self, in: host.view))
         XCTAssertTrue(terminal.text.contains("Your code is running."))
         XCTAssertFalse(terminal.text.contains("\u{001B}"))

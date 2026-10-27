@@ -24,6 +24,10 @@ final class TerminalTextView: UITextView {
     private var imageSlots: [Int: [ImageSlot]] = [:]
     private var decodeInFlight = false
     private var preservingPosition = false
+    // UITextView may adjust contentOffset in a later layout pass after an
+    // attachment or selection changes. Keep the image-frame viewport anchored
+    // until text, the viewport, or an explicit user scroll changes it.
+    private var imageViewportOffset: CGPoint?
     private var laidOutSize: CGSize = .zero
     // One batch in flight per terminal; newer snapshots replace imageSources
     // rather than queuing a decoding task for every animation frame.
@@ -39,16 +43,33 @@ final class TerminalTextView: UITextView {
     }
 
     func updateFollowPosition() {
+        imageViewportOffset = nil
         followsOutput = bottomOffset - contentOffset.y <= 24
     }
 
     func pauseFollowing() {
+        imageViewportOffset = nil
         followsOutput = false
+    }
+
+    func selectionDidChange() {
+        if !preservingPosition { imageViewportOffset = nil }
+    }
+
+    private func restoreImageViewport(_ offset: CGPoint) {
+        let anchor = CGPoint(x: offset.x, y: min(max(offset.y, -adjustedContentInset.top), bottomOffset))
+        imageViewportOffset = anchor
+        if contentOffset != anchor { setContentOffset(anchor, animated: false) }
     }
 
     func setOutput(_ output: String, images: [Widget], imageRevision: Int) {
         let textChanged = renderedOutput != output
         guard textChanged || renderedImageRevision != imageRevision else { return }
+        if textChanged || isTracking || isDragging || isDecelerating {
+            imageViewportOffset = nil
+        } else if imageViewportOffset == nil {
+            imageViewportOffset = contentOffset
+        }
         if renderedImageRevision != imageRevision {
             imageSources = Dictionary(uniqueKeysWithValues: images.compactMap { widget in
                 guard widget.kind == "image", let encoded = widget.image_data else { return nil }
@@ -165,7 +186,9 @@ final class TerminalTextView: UITextView {
 
     private func applyImages(_ updates: [Int: CachedImage]) {
         guard !updates.isEmpty else { return }
-        let oldOffset = contentOffset
+        let userScrolling = isTracking || isDragging || isDecelerating
+        if userScrolling { imageViewportOffset = nil }
+        let oldOffset = imageViewportOffset ?? contentOffset
         let oldSelection = selectedRange
         let firstImage = updates.contains { imageCache[$0.key] == nil && $0.value.image != nil }
         preservingPosition = true
@@ -183,18 +206,20 @@ final class TerminalTextView: UITextView {
             }
         }
         layoutIfNeeded()
-        selectedRange = oldSelection
+        if selectedRange != oldSelection { selectedRange = oldSelection }
         // Follow once when a newly created image's dimensions become known.
         // Subsequent frames never move the user's console viewport.
         if firstImage && followsOutput && !isTracking && !isDragging && !isDecelerating {
             scrollToBottom()
-        } else {
-            setContentOffset(oldOffset, animated: false)
+            imageViewportOffset = contentOffset
+        } else if !userScrolling {
+            restoreImageViewport(oldOffset)
         }
         preservingPosition = false
     }
 
     func scrollToBottom() {
+        imageViewportOffset = nil
         let target = CGPoint(x: 0, y: bottomOffset)
         if abs(contentOffset.y - target.y) > 0.5 {
             setContentOffset(target, animated: false)
@@ -207,9 +232,11 @@ final class TerminalTextView: UITextView {
     }
 
     override func layoutSubviews() {
+        if isTracking || isDragging || isDecelerating { imageViewportOffset = nil }
         super.layoutSubviews()
         let viewportChanged = bounds.size != laidOutSize
         if viewportChanged {
+            imageViewportOffset = nil
             laidOutSize = bounds.size
             for slots in imageSlots.values {
                 for slot in slots {
@@ -220,6 +247,11 @@ final class TerminalTextView: UITextView {
         }
         if viewportChanged && !preservingPosition && followsOutput && !isTracking && !isDragging && !isDecelerating {
             scrollToBottom()
+        } else if let offset = imageViewportOffset {
+            // Also undo delayed TextKit offset compensation after the async
+            // decode callback has returned; one immediate restoration is not
+            // sufficient when attachment geometry invalidates layout.
+            restoreImageViewport(offset)
         }
     }
 }
@@ -268,6 +300,10 @@ struct TerminalView: UIViewRepresentable {
 
     final class Coordinator: NSObject, UITextViewDelegate {
         var lastFollowRequest = 0
+        func textViewDidChangeSelection(_ textView: UITextView) {
+            (textView as? TerminalTextView)?.selectionDidChange()
+        }
+
         func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
             (scrollView as? TerminalTextView)?.pauseFollowing()
         }

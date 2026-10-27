@@ -174,8 +174,9 @@ final class ScrollingTests: XCTestCase {
         let fixedPixels = try XCTUnwrap(fixed.image)
         let text = terminal.attributedText.string
         terminal.pauseFollowing()
-        terminal.setContentOffset(CGPoint(x: 0, y: 80), animated: false)
         terminal.selectedRange = NSRange(location: 0, length: 6)
+        terminal.setContentOffset(CGPoint(x: 0, y: 80), animated: false)
+        XCTAssertEqual(terminal.contentOffset.y, 80, accuracy: 2)
 
         // Fast producers replace the latest snapshot rather than appending
         // attachment copies or retaining a decode task for every frame.
@@ -191,7 +192,27 @@ final class ScrollingTests: XCTestCase {
         XCTAssertEqual(terminal.contentOffset.y, 80, accuracy: 2)
         XCTAssertFalse(terminal.followsOutput)
 
-        terminal.setOutput(output + "more text\n", images: [try imageWidget(revision: 30, size: CGSize(width: 30, height: 10)), staticImage], imageRevision: 30)
+        // TextKit can compensate for an attachment in a deferred layout pass.
+        // The viewport must remain stable after that pass as well.
+        try await Task.sleep(nanoseconds: 50_000_000)
+        terminal.setNeedsLayout()
+        terminal.layoutIfNeeded()
+        XCTAssertEqual(terminal.contentOffset.y, 80, accuracy: 2)
+        terminal.resumeFollowing()
+        XCTAssertEqual(terminal.contentOffset.y, terminal.bottomOffset, accuracy: 2)
+        terminal.pauseFollowing()
+        terminal.setContentOffset(CGPoint(x: 0, y: 120), animated: false)
+        terminal.updateFollowPosition()
+        terminal.setOutput(output, images: [try imageWidget(revision: 31, size: CGSize(width: 31, height: 10)), staticImage], imageRevision: 31)
+        _ = try await waitForImage(in: terminal, at: firstPosition, size: CGSize(width: 31, height: 10))
+        XCTAssertEqual(terminal.contentOffset.y, 120, accuracy: 2)
+        terminal.selectionDidChange()
+        terminal.setContentOffset(CGPoint(x: 0, y: 170), animated: false)
+        terminal.setNeedsLayout()
+        terminal.layoutIfNeeded()
+        XCTAssertEqual(terminal.contentOffset.y, 170, accuracy: 2, "Find or selection navigation should release the animation viewport anchor")
+
+        terminal.setOutput(output + "more text\n", images: [try imageWidget(revision: 31, size: CGSize(width: 31, height: 10)), staticImage], imageRevision: 31)
         XCTAssertTrue(attachment(in: terminal, at: firstPosition) === moving)
         XCTAssertTrue(terminal.attributedText.string.hasSuffix("after\nmore text\n"))
     }
