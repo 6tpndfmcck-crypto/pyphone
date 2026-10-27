@@ -23,6 +23,7 @@ targets:
       - sources/Runner.swift
       - tests/ScrollingTests.swift
       - tests/WorkspaceTests.swift
+      - tests/RunnerImageTests.swift
       - tests/PythonBridgeStub.swift
     settings:
       base:

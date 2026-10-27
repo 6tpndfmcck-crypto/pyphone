@@ -49,7 +49,7 @@ swift_widget_keys = set(re.findall(r"^\s*(?:let|var) (\w+):", widget_struct.grou
 require(python_state_keys == swift_state_keys,
         f"Python state keys {sorted(python_state_keys)} do not match Swift PyState fields {sorted(swift_state_keys)}")
 
-widget_block = ui_py.split("def _state():", 1)[1].split("\ndef _event(", 1)[0]
+widget_block = ui_py.split("def _state(", 1)[1].split("\ndef _snapshot(", 1)[0]
 python_widget_keys = set(re.findall(r'"([a-z_]+)"\s*:', widget_block))
 require(python_widget_keys == swift_widget_keys,
         f"Python widget keys {sorted(python_widget_keys)} do not match Swift Widget fields {sorted(swift_widget_keys)}")

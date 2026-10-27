@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
-"""Regression tests for input, callbacks, diagnostics, and package installation."""
+"""Regression tests for input, callbacks, images, diagnostics, and packages."""
 import builtins
+import base64
+import io
 from contextlib import contextmanager
 import importlib
 import json
@@ -56,7 +58,121 @@ class Regressions(unittest.TestCase):
     def setUp(self):
         wait_until(lambda: not runner._running[0] and not runner._cb_tid[0])
         runner.take_output()
+        ui._reset()
+
+    @staticmethod
+    def image_frame(data):
+        class Frame:
+            size = (1, 1)
+
+            def save(self, target, format=None):
+                if format != "PNG":
+                    raise AssertionError("Images must be encoded as PNG")
+                target.write(data)
+        return Frame()
+
+    def test_image_updates_keep_one_console_position_and_latest_frame(self):
+        print("before image")
+        screen = ui.image(self.image_frame(b"initial"))
+        identity = screen.id
+        initial_revision = screen.image_revision
+        print("after image")
+        for index in range(1_000):
+            screen.set(self.image_frame(str(index).encode()))
+        self.assertEqual(screen.id, identity)
+        self.assertEqual(len(ui._widgets), 1)
+        self.assertEqual(len(ui._recent_images), 1)
+        self.assertEqual(base64.b64decode(screen.image_data), b"999")
+        self.assertGreater(screen.image_revision, initial_revision)
+        self.assertEqual(runner.take_output(), f"before image\n\x1fPYPHONE_IMAGE:{identity}\x1e\nafter image\n")
+
+    def test_image_deltas_omit_unchanged_data_and_support_full_resync(self):
+        first = ui.image(self.image_frame(b"first"))
+        second = ui.image(self.image_frame(b"second"))
+        initial = json.loads(runner.get_state())
+        self.assertNotEqual(first.id, second.id)
+        unchanged = json.loads(runner.get_state(str(initial["seq"])))
+        self.assertTrue(all(widget["image_data"] is None for widget in unchanged["widgets"]))
+        first.set(self.image_frame(b"replacement"))
+        delta = json.loads(runner.get_state(str(initial["seq"])))
+        by_id = {widget["id"]: widget for widget in delta["widgets"]}
+        self.assertEqual(base64.b64decode(by_id[first.id]["image_data"]), b"replacement")
+        self.assertGreater(by_id[first.id]["image_revision"], initial["seq"])
+        self.assertIsNone(by_id[second.id]["image_data"])
+        full = json.loads(runner.get_state("-1"))
+        self.assertTrue(all(widget["image_data"] is not None for widget in full["widgets"]))
+        before_duplicate = full["seq"]
+        first.set(self.image_frame(b"replacement"))
+        duplicate = json.loads(runner.get_state(str(before_duplicate)))
+        self.assertEqual(duplicate["seq"], before_duplicate)
+        self.assertTrue(all(widget["image_data"] is None for widget in duplicate["widgets"]))
+        label = ui.label("before")
+        label.set("after")
+        after_text = json.loads(runner.get_state(str(before_duplicate)))
+        self.assertEqual(next(widget["text"] for widget in after_text["widgets"] if widget["id"] == label.id), "after")
+        self.assertTrue(all(widget["image_data"] is None for widget in after_text["widgets"]))
+
+    def test_image_payload_history_is_bounded_and_clear_keeps_console_snapshot(self):
+        first = ui.image(self.image_frame(b"old"))
+        for index in range(16):
+            ui.image(self.image_frame(str(index).encode()))
+        self.assertIsNone(first.image_data)
+        self.assertEqual(len(ui._recent_images), 16)
         ui.clear()
+        self.assertEqual(ui._widgets, [])
+        snapshots = json.loads(runner.get_state())["widgets"]
+        self.assertEqual(len(snapshots), 16)
+        self.assertTrue(all(widget["image_data"] is not None for widget in snapshots))
+        ui._reset()
+        self.assertEqual(json.loads(runner.get_state())["widgets"], [])
+
+    def test_image_payload_budget_evicts_old_data_and_can_restore_same_id(self):
+        with mock.patch.object(ui, "_MAX_IMAGE_BYTES", 12):
+            first = ui.image(self.image_frame(b"123456"))  # 8 base64 bytes
+            initial = json.loads(runner.get_state())
+            second = ui.image(self.image_frame(b"abcdef"))
+            state = json.loads(runner.get_state(str(initial["seq"])))
+            delta = {widget["id"]: widget for widget in state["widgets"]}
+            self.assertIsNone(delta[first.id]["image_data"])
+            self.assertGreater(delta[first.id]["image_revision"], initial["seq"])
+            self.assertEqual(base64.b64decode(delta[second.id]["image_data"]), b"abcdef")
+            first.set(self.image_frame(b"new"))
+            self.assertEqual(base64.b64decode(first.image_data), b"new")
+            self.assertLessEqual(sum(len(widget.image_data or "") for widget in ui._recent_images.values()), 12)
+            self.assertEqual(first.id, initial["widgets"][0]["id"])
+
+    def test_failed_image_update_preserves_last_frame(self):
+        screen = ui.image(self.image_frame(b"last good frame"))
+        initial = json.loads(runner.get_state())
+        runner.take_output()
+        broken = self.image_frame(b"bad frame")
+        with mock.patch.object(broken, "save", side_effect=ValueError("could not encode image")):
+            with self.assertRaisesRegex(ValueError, "could not encode"):
+                screen.set(broken)
+        self.assertEqual(base64.b64decode(screen.image_data), b"last good frame")
+        self.assertEqual(json.loads(runner.get_state())["seq"], initial["seq"])
+        self.assertEqual(runner.take_output(), "")
+
+    def test_helios_rgba_animation_uses_memory_and_preserves_pixels(self):
+        try:
+            import helios
+        except ImportError:
+            self.skipTest("Install helios-image to test the HeliOS image API")
+        coin = helios.new("RGBA", (4, 4), (255, 200, 0, 255)).resize((8, 8))
+        screen = ui.image(helios.new("RGBA", (30, 40), (0, 0, 0, 0)))
+        marker = runner.take_output()
+        with mock.patch.object(Path, "write_bytes", side_effect=AssertionError("Animation must not write files")):
+            for y in range(0, 31, 5):
+                frame = helios.new("RGBA", (30, 40), (0, 0, 0, 0))
+                frame.paste(coin, (11, y))
+                screen.set(frame)
+        rendered = helios.open(io.BytesIO(base64.b64decode(screen.image_data)))
+        self.assertEqual(rendered.mode, "RGBA")
+        self.assertEqual(rendered.size, (30, 40))
+        self.assertEqual(rendered.getpixel((0, 0)), (0, 0, 0, 0))
+        self.assertEqual(rendered.getpixel((11, 30)), (255, 200, 0, 255))
+        self.assertEqual(runner.take_output(), "")
+        self.assertEqual(marker.count("PYPHONE_IMAGE:"), 1)
 
     def test_import_sibling_script_after_working_directory_changes(self):
         with local_scripts() as folder:

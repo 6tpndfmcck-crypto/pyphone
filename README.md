@@ -120,6 +120,44 @@ Python caches imported modules between runs. After editing an already imported h
 
 ## Python runtime and packages
 
+### Animating images in the Console
+
+`ui.image(source)` inserts one image beside ordinary Console text. Call
+`.set(frame)` on the returned object to update that display in place. Frames do
+not add Console lines, move the image, or require saving PNG files.
+
+HeliOS images work directly, including RGBA transparency, `.paste()`, and
+`.resize()`. The package is distributed as **helios-image** on PyPI and imported
+as `helios`; install it through Python packages if it is not already installed.
+For example, put `1coin.PNG` in Files and run:
+
+```python
+import helios
+import ui
+import time
+
+coin = helios.open("1coin.PNG").resize((80, 80))
+screen = ui.image(helios.new("RGBA", (300, 400), (0, 0, 0, 0)))
+
+for y in range(0, 321, 5):
+    frame = helios.new("RGBA", (300, 400), (0, 0, 0, 0))
+    frame.paste(coin, (110, y))
+    screen.set(frame)
+    time.sleep(0.03)
+```
+
+Refresh targets approximately 30 FPS while images change and slows to the usual
+200 ms interval when idle. Slower devices, large images, and Python computation
+can lower the frame rate; intermediate frames are dropped in favor of the
+latest frame. Image decoding runs off the interface thread and unchanged frames
+are reused. Normal text, `input()`, and errors still share the Console.
+
+Images retain their Console position until output is cleared or trimmed. Frame
+payloads are limited to 8 MB per source image, with at most 16 recent image
+snapshots and 32 MiB of encoded data retained per cache. Older images may lose
+their displayed pixels when evicted. Displayed images are downsampled to at most
+1024 pixels on their longest side; the original Python image is unchanged.
+
 PyPhone uses **CPython 3.13** with an iOS-compatible runtime and NumPy. Standard Python features such as variables, functions, loops, exceptions, lists, and imports work subject to iOS restrictions.
 
 Use **Files → Python packages** to install a supported Python distribution. The package screen does not overwrite the source code currently in the editor.
@@ -178,7 +216,7 @@ python scripts/test_runtime.py
 python scripts/test_regressions.py
 ```
 
-Host runtime tests require NumPy. GitHub Actions also compiles Swift screens in a simulator test project with a stub interpreter, tests migration/recovery and scrolling, and captures an editor screenshot. The device build uses the actual Python/SDL2 frameworks and checks IPA resources, version, and packaged ZIP archives.
+Host runtime tests require NumPy; install `helios-image==0.3.0` to also run the real HeliOS animation regression. GitHub Actions installs both dependencies, compiles Swift screens in a simulator test project with a stub interpreter, tests migration/recovery, scrolling, and image animation, and captures an editor screenshot. The device build uses the actual Python/SDL2 frameworks and checks IPA resources, version, and packaged ZIP archives.
 
 ### Recommended on-device smoke tests
 

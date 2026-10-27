@@ -19,9 +19,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - name: Install host NumPy for runtime tests
+      - name: Install host NumPy and HeliOS for runtime tests
         run: |
-          python -m pip install --only-binary=:all: "numpy==2.3.5"
+          python -m pip install --only-binary=:all: "numpy==2.3.5" "helios-image==0.3.0"
       - name: Compile Python sources
         env:
           PYTHONDONTWRITEBYTECODE: "1"

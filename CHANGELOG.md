@@ -1,5 +1,11 @@
 # Unreleased
 
+Console images now animate in place: `ui.image()` creates one display and
+`.set(frame)` replaces its latest frame using the same ID. Added adaptive
+refresh targeting 30 FPS, background decoding, delta image transport, and
+bounded frame caches. HeliOS RGBA images encode directly in memory. Added
+Python and simulator regressions for animation, image identity, and text output.
+
 Scripts can import local helper modules and packages from the Files folder.
 Refresh import discovery before each run so newly added files are available
 without restarting, and retain the Files import path if a script changes its

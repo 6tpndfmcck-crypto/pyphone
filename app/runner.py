@@ -299,7 +299,7 @@ def _input(prompt=""):
         _got.clear()
         _prompt_id[0] += 1
         _prompt[0] = prompt
-        ui._seq[0] += 1
+        ui._changed()
     try:
         while not _got.wait(0.1):
             pass
@@ -537,16 +537,23 @@ def input_reply(arg):
 
 
 def get_state(_=""):
+    # Empty/negative cursors request a full snapshot. Native polling supplies
+    # the last successfully decoded sequence to omit unchanged PNG payloads.
+    try:
+        since = int(_) if _ else -1
+    except (TypeError, ValueError):
+        since = -1
     with _input_lock:
         prompt, prompt_id = _prompt[0], _prompt_id[0]
+    seq, widgets = ui._snapshot(since)
     tid = _run_tid[0] or _cb_tid[0]
     return json.dumps({
-        "widgets": ui._state(),
+        "widgets": widgets,
         "running": bool(_running[0] or _callback_running[0]),
         "prompt": prompt,
         "prompt_id": prompt_id,
         "tid": tid,
-        "seq": ui._seq[0],
+        "seq": seq,
         "error_line": _error_line[0],
     })
 
@@ -564,7 +571,7 @@ def _callback_worker(d):
         with _run_lock:
             _cb_tid[0] = 0
             _callback_running[0] = False
-        ui._seq[0] += 1
+        ui._changed()
 
 
 def send_event(arg):
@@ -584,7 +591,7 @@ def send_event(arg):
             raise
     else:
         ui._event(d["id"], d["kind"], d.get("value", ""))
-        ui._seq[0] += 1
+        ui._changed()
     return ""
 
 

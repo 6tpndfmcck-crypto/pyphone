@@ -139,7 +139,7 @@ jobs:
           export PYTHONDONTWRITEBYTECODE=1
           export PYTHONPYCACHEPREFIX=/tmp/pyphone-pycache
           rm -rf "$PYTHONPYCACHEPREFIX"
-          "$BUILD_PYTHON" -m pip install --only-binary=:all: "numpy==2.3.5"
+          "$BUILD_PYTHON" -m pip install --only-binary=:all: "numpy==2.3.5" "helios-image==0.3.0"
           "$BUILD_PYTHON" -m py_compile app/runner.py app/ui.py scripts/test_runtime.py scripts/test_contracts.py scripts/test_regressions.py
           "$BUILD_PYTHON" scripts/test_contracts.py
           "$BUILD_PYTHON" scripts/test_runtime.py
