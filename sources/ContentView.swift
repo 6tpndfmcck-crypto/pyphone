@@ -130,7 +130,7 @@ struct ContentView: View {
                            lineRequest: lineRequest, targetLine: targetLine)
                     .id(scripts.name).frame(width: viewport.size.width, height: viewport.size.height)
             }
-            if !runner.widgets.isEmpty {
+            if runner.widgets.contains(where: { $0.kind != "image" }) {
                 Divider()
                 window
                     .frame(minHeight: 140, maxHeight: 300)
@@ -153,7 +153,7 @@ struct ContentView: View {
                 VStack(spacing: 16) {
                     Image(systemName: "rectangle.3.group").font(.system(size: 42)).foregroundStyle(.primary)
                     Text("Your program's window").font(.title2.bold())
-                    Text("Labels, buttons, and images from ui appear here.").foregroundStyle(.secondary).multilineTextAlignment(.center)
+                    Text("Interactive controls from ui appear here. Images show in the console.").foregroundStyle(.secondary).multilineTextAlignment(.center)
                     Button("Try the window example") {
                         if scripts.create(name: "my_window", text: Starter.code) { tab = .code }
                     }.buttonStyle(.borderedProminent)
@@ -162,7 +162,7 @@ struct ContentView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
                         Text("PROGRAM WINDOW").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                        ForEach(runner.widgets) { WidgetView(w: $0, runner: runner) }
+                        ForEach(runner.widgets.filter { $0.kind != "image" }) { WidgetView(w: $0, runner: runner) }
                     }.frame(maxWidth: .infinity, alignment: .leading).padding(20)
                 }.background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 16))
                     .padding(.horizontal, 10).padding(.bottom, 6)
