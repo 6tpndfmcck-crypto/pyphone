@@ -1,11 +1,17 @@
 import base64
 import io
+import sys
 from pathlib import Path
 
 
 _widgets = []
 _next = [0]
 _seq = [0]
+
+
+def _emit_image(widget_id):
+    """Mark the image position in stdout without moving image bytes through text."""
+    sys.stdout.write(f"\x1fPYPHONE_IMAGE:{widget_id}\x1e\n")
 
 
 def _image_bytes(source):
@@ -45,6 +51,7 @@ class Widget:
         if self.kind == "image":
             self.image_data = _read_image(value)
             self._text = str(value) if isinstance(value, (str, Path)) else "<HeliOS Image>"
+            _emit_image(self.id)
         else:
             self._text = str(value)
         _seq[0] += 1
@@ -79,10 +86,12 @@ def entry(placeholder="", text=""):
 
 
 def image(source):
-    """Display an image file or HeliOS Image in PyPhone's Window tab."""
+    """Display an image file or HeliOS Image in the console output."""
     data = _read_image(source)
     text = str(source) if isinstance(source, (str, Path)) else "<HeliOS Image>"
-    return Widget("image", text, image_data=data)
+    widget = Widget("image", text, image_data=data)
+    _emit_image(widget.id)
+    return widget
 
 
 def _state():
