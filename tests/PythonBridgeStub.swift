@@ -7,6 +7,7 @@ final class PythonBridge {
     private static var promptState: String?
     private static var pendingOutput = ""
     private static var stateArguments: [String] = []
+    private static var pendingStateArgument: String?
     static func setPromptState(_ state: String?) {
         lock.lock()
         promptState = state
@@ -28,6 +29,7 @@ final class PythonBridge {
         promptState = nil
         pendingOutput = ""
         stateArguments.removeAll()
+        pendingStateArgument = nil
         lock.unlock()
     }
     static func start() -> String? { nil }
@@ -37,14 +39,21 @@ final class PythonBridge {
         case "get_state":
             lock.lock()
             defer { lock.unlock() }
-            stateArguments.append(arg)
-            if stateArguments.count > 1_000 { stateArguments.removeFirst(stateArguments.count - 1_000) }
+            pendingStateArgument = arg
             return promptState ?? #"{"widgets":[],"running":false,"prompt":null,"prompt_id":0,"tid":0,"seq":0,"error_line":null}"#
         case "take_output":
             lock.lock()
             defer { lock.unlock() }
             let output = pendingOutput
             pendingOutput = ""
+            // Cursor-based test waits must observe a completed state/output
+            // read. Recording at get_state would let a previous test's runner
+            // drain the next test's output before its queued completion exits.
+            if let argument = pendingStateArgument {
+                stateArguments.append(argument)
+                if stateArguments.count > 1_000 { stateArguments.removeFirst(stateArguments.count - 1_000) }
+                pendingStateArgument = nil
+            }
             return output
         case "list_packages": return "[]"
         default: return ""
