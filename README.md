@@ -1,4 +1,4 @@
-# PyPhone 2.0
+# PyPhone
 
 A native Python workspace for iPhone. Write, run, and organize Python scripts on iOS with **CPython 3.13**, **NumPy**, an autosaving editor, and a Console that supports text, input, and animated images.
 
