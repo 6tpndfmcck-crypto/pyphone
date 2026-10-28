@@ -4,6 +4,8 @@ A native Python workspace for iPhone. Write, run, and organize Python scripts on
 
 **Requires iOS 16 or later.** The project builds an unsigned IPA for installation through your own signing or app-container setup. Editing and running local scripts work offline once the app and any required packages are installed.
 
+This README describes the source on `main`. An Actions artifact contains the app built from that run's commit, so an older download may not include every feature documented here.
+
 ## Contents
 
 - [What the app includes](#what-the-app-includes)
@@ -49,7 +51,7 @@ See [CHANGELOG.md](CHANGELOG.md) for changes to the app.
 
 The IPA is unsigned. The repository does not provide an App Store installation or a signing service. Artifacts are configured to expire after 14 days; choose a newer successful run or run the workflow again if a download has expired.
 
-The bundle ID is `com.example.pyphone`, and the app version is **2.0.0**. Installing an update over an existing installation with a compatible signing setup is intended to preserve app data. **Export important scripts and copy any assets or package folders before deleting or replacing the app.** Deleting an iOS app can delete its sandbox data.
+The bundle ID is `com.example.pyphone`, and the app version is **2.0.0**. Actions uses its run number as the build number; the displayed app version alone does not identify a particular source revision. Installing an update over an existing installation with a compatible signing setup is intended to preserve app data. **Export important scripts and copy any assets or package folders before deleting or replacing the app.** Deleting an iOS app can delete its sandbox data.
 
 ## Run your first script
 
@@ -206,6 +208,16 @@ If you previously used `from helper import greet`, import that name again after 
 
 PyPhone includes a small `ui` module for native controls and Console images. Import it with `import ui`; it is separate from third-party desktop GUI libraries.
 
+The related projects use different package and import names:
+
+| Component | Installation | Python import | Purpose |
+| --- | --- | --- | --- |
+| PyPhone's native UI | Included in the app | `import ui` | Controls below the editor and images in Console. |
+| [HeliOS](https://github.com/6tpndfmcck-crypto/heliOS) | Distribution: `helios-image` | `import helios` | Create and edit images that can be passed to `ui.image()`. |
+| [PyUI](https://github.com/6tpndfmcck-crypto/PyUI) | Distribution: `pyui-toolkit` | `import pyui` | Higher-level widgets that use PyPhone's native `ui` backend. |
+
+HeliOS and PyUI are optional. PyUI's current source uses PyPhone's native bridge on iOS and Tkinter on a desktop; it does not require SDL2. See the linked project READMEs for their APIs and installation instructions.
+
 | API | Behavior |
 | --- | --- |
 | `ui.label(text="")` | Create a text label below the Code editor. |
@@ -313,7 +325,7 @@ PyPhone embeds CPython 3.13 and an iOS-compatible standard library. The build pi
 | pip | `25.2` | Bundled Python packaging tooling. |
 | certifi | `2025.1.31` | Certificate authorities used for HTTPS package downloads. |
 
-HeliOS and Colorama are optional installations, not bundled requirements. Import names can differ from distribution names: install `helios-image`, then `import helios`.
+HeliOS, PyUI, and Colorama are optional installations, not bundled requirements. Import names can differ from distribution names: install `helios-image`, then `import helios`; PyUI's distribution name is `pyui-toolkit`, with `import pyui`.
 
 ### Installing from PyPI
 
@@ -351,7 +363,7 @@ Successfully processed wheels move to **Installed** and their contents are extra
 - Imported modules remain cached. Restart the app after changing installed package files or versions. There is no in-app uninstall screen; manage extracted package folders through iOS Files with the app closed.
 - Compiled extensions require compatible iOS binaries bundled through an app build. Installing a Python wrapper does not supply a missing native library.
 
-SDL2 is embedded as an iOS framework by the build workflow. PySDL2 library lookup is configured, but desktop window/event-loop behavior is not guaranteed. See [SDL2-iOS.md](SDL2-iOS.md) for the native framework build and integration limits.
+SDL2 is embedded as an iOS framework by the build workflow. PySDL2 library lookup is configured, but desktop window/event-loop behavior is not guaranteed. The PySDL2 framework-lookup compatibility patch runs at interpreter startup, so restart PyPhone after first installing PySDL2. PyPhone's built-in `ui` module and the current PyUI native backend do not require PySDL2. See [SDL2-iOS.md](SDL2-iOS.md) for the native framework build and integration limits.
 
 ## Settings
 
@@ -406,6 +418,7 @@ Additional starter source for greetings, a number game, native UI controls, and 
 | A script seems stuck after a prompt | Open Console and send an answer to `input()`, including an empty answer if appropriate. |
 | Stop does not take effect immediately | A native operation may still be blocking. The interrupt is delivered when Python can handle it. |
 | `ModuleNotFoundError` | Check the import name, local filename, installed distribution, and missing dependencies. For HeliOS, install `helios-image` and import `helios`. |
+| PyUI tries to load SDL2 | Check which `pyui` package/version is being imported. The current [PyUI source](https://github.com/6tpndfmcck-crypto/PyUI) uses PyPhone's native `ui` bridge; its distribution is `pyui-toolkit`. Restart after replacing an older installation. |
 | An edited helper still has old behavior | Reload the module, re-import any copied names, or restart the app. |
 | A relative file or image cannot be found | Put the resource in the app's Files directory and check its exact name and relative path. Editor source does not define `__file__`. |
 | An image animation creates many copies | Create one `ui.image(...)` before the loop and call that widget's `.set(frame)` inside the loop. |
@@ -501,3 +514,4 @@ PyPhone runs Python inside an iOS app sandbox. Standard language features and co
 - Stop is cooperative, and animation frame rate depends on device performance and workload.
 
 For release history, see [CHANGELOG.md](CHANGELOG.md). For native SDL2 details, see [SDL2-iOS.md](SDL2-iOS.md).
+
