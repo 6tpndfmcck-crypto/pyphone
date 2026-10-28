@@ -475,7 +475,7 @@ A local device build needs more than `xcodegen generate`: stage the BeeWare **Py
 
 The build creates an unsigned IPA and checks the packaged Python resources, NumPy, SDL2, native framework layout, IPA structure, ZIP integrity, and checksums. Signing and installation are separate from these checks.
 
-The workflow caches the prepared Python runtime, pinned host test dependencies, iOS package downloads, and compiler modules. Host-environment and compiler caches are tied to the exact toolchain and runner image; dependency or staging changes invalidate the relevant caches. App products and target object files are rebuilt from the current source, and all runtime and packaging checks still run. The first build after a cache miss can take longer while caches fill. Simulator startup begins before project generation so it can overlap compilation.
+The workflow caches the prepared Python runtime, pinned host test dependencies, iOS package downloads, and compiler modules. Host-environment and compiler caches are tied to the exact toolchain and runner image; dependency or staging changes invalidate the relevant caches. App products and target object files are rebuilt from the current source, and all runtime and packaging checks still run. The first build after a cache miss can take longer while caches fill.
 
 ### Useful on-device checks
 
