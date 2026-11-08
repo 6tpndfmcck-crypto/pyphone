@@ -89,6 +89,62 @@ final class ScrollingTests: XCTestCase {
         XCTAssertEqual(editor.contentOffset.y + editor.bounds.height, editor.contentSize.height, accuracy: 2)
     }
 
+    private final class AttributeEditRecorder: NSObject, NSTextStorageDelegate {
+        var ranges: [NSRange] = []
+
+        func textStorage(_ textStorage: NSTextStorage, didProcessEditing editedMask: NSTextStorage.EditActions,
+                         range editedRange: NSRange, changeInLength delta: Int) {
+            if editedMask.contains(.editedAttributes) && !editedMask.contains(.editedCharacters) {
+                ranges.append(editedRange)
+            }
+        }
+    }
+
+    @MainActor
+    func testTypingPastLine64DoesNotRehighlightFromTop() async throws {
+        let code = (1...150).map { "print('Line \($0)')" }.joined(separator: "\n")
+        let host = UIHostingController(rootView: CodeEditor(text: .constant(code)))
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        host.view.frame = window.bounds
+        host.view.layoutIfNeeded()
+        let editor = try XCTUnwrap(find(EditorTextView.self, in: host.view))
+        let coordinator = try XCTUnwrap(editor.delegate as? CodeEditor.Coordinator)
+        editor.becomeFirstResponder()
+        editor.layoutManager.ensureLayout(for: editor.textContainer)
+        let start = editor.gutter.lineStarts[99]
+        editor.selectedRange = NSRange(location: start, length: 0)
+        editor.scrollRangeToVisible(editor.selectedRange)
+        editor.layoutIfNeeded()
+        try await Task.sleep(nanoseconds: 100_000_000)
+        editor.layoutIfNeeded()
+        XCTAssertGreaterThan(editor.contentOffset.y, 0)
+
+        let recorder = AttributeEditRecorder()
+        editor.textStorage.delegate = recorder
+        defer { editor.textStorage.delegate = nil }
+        // Check after each character and a deferred layout pass, before the
+        // next keystroke can hide a jump by scrolling back to the caret.
+        for character in ["1", "2", " ", "#", "x"] {
+            recorder.ranges.removeAll()
+            let offset = editor.contentOffset.y
+            editor.insertText(character)
+            coordinator.textViewDidChange(editor)
+            let selection = editor.selectedRange
+            try await Task.sleep(nanoseconds: 50_000_000)
+            editor.layoutIfNeeded()
+            XCTAssertEqual(editor.selectedRange, selection)
+            XCTAssertEqual(editor.contentOffset.y, offset, accuracy: 2)
+            XCTAssertTrue(recorder.ranges.allSatisfy { $0.location >= start },
+                          "Typing on line 100 must not invalidate attributes from line 1")
+        }
+        recorder.ranges.removeAll()
+        coordinator.applyHighlighting()
+        XCTAssertTrue(recorder.ranges.isEmpty, "Unchanged highlighting must not edit live storage")
+    }
+
     @MainActor
     func testTerminalFollowsOutputButPreservesScrollback() async throws {
         let host = UIHostingController(rootView: TerminalView(output: ""))
