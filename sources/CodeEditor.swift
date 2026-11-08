@@ -266,18 +266,20 @@ struct CodeEditor: UIViewRepresentable {
             let source = tv.text ?? ""
             let ns = source as NSString
             let full = NSRange(location: 0, length: ns.length)
-            let selection = tv.selectedRange
-            let offset = tv.contentOffset
             let font = UIFont.monospacedSystemFont(ofSize: parent.fontSize, weight: .regular)
             let storage = tv.textStorage
 
-            storage.beginEditing()
-            storage.setAttributes([.font: font, .foregroundColor: UIColor.label], range: full)
+            // Build colors away from the live text storage. Clearing and then
+            // repainting the whole document makes TextKit invalidate layout from
+            // line 1 on every keystroke, even when most attributes are unchanged.
+            let highlighted = NSMutableAttributedString(string: source, attributes: [
+                .font: font, .foregroundColor: UIColor.label
+            ])
 
             func paint(_ pattern: String, _ color: UIColor, options: NSRegularExpression.Options = []) {
                 guard let regex = try? NSRegularExpression(pattern: pattern, options: options) else { return }
                 for match in regex.matches(in: source, range: full) {
-                    storage.addAttribute(.foregroundColor, value: color, range: match.range)
+                    highlighted.addAttribute(.foregroundColor, value: color, range: match.range)
                 }
             }
 
@@ -292,13 +294,27 @@ struct CodeEditor: UIViewRepresentable {
                 for match in regex.matches(in: source, range: full) {
                     let token = ns.substring(with: match.range)
                     let color = token.hasPrefix("#") ? UIColor.systemGreen : UIColor.systemRed
-                    storage.addAttribute(.foregroundColor, value: color, range: match.range)
+                    highlighted.addAttribute(.foregroundColor, value: color, range: match.range)
                 }
             }
-            storage.endEditing()
-            tv.selectedRange = NSRange(location: min(selection.location, ns.length), length: min(selection.length, max(0, ns.length - selection.location)))
+            var changes: [(NSRange, [NSAttributedString.Key: Any])] = []
+            highlighted.enumerateAttributes(in: full) { desired, range, _ in
+                storage.enumerateAttributes(in: range) { current, subrange, _ in
+                    if !NSDictionary(dictionary: current).isEqual(to: desired) {
+                        changes.append((subrange, desired))
+                    }
+                }
+            }
+            if !changes.isEmpty {
+                storage.beginEditing()
+                for (range, attributes) in changes {
+                    storage.setAttributes(attributes, range: range)
+                }
+                storage.endEditing()
+            }
+            // Attribute edits leave the selection intact. Reassigning it or
+            // restoring a stale contentOffset fights UIKit's caret scrolling.
             tv.typingAttributes = [.font: font, .foregroundColor: UIColor.label]
-            tv.setContentOffset(offset, animated: false)
         }
 
         // MARK: Suggestion bar
