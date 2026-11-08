@@ -55,7 +55,7 @@ final class PygameUITests: XCTestCase {
             let context = try XCTUnwrap(CGContext(data: bytes.baseAddress, width: width, height: height,
                 bitsPerComponent: 8, bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(),
                 bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue))
-            context.draw(cg, in: CGRect(x: 0, y: 0, width: width, height: height))
+            context.draw(cg, in: CGRect(x: 0, y: 0, width: CGFloat(width), height: CGFloat(height)))
             let rgba = bytes.bindMemory(to: UInt8.self)
             return stride(from: 0, to: rgba.count, by: 4).reduce(0) { count, offset in
                 // Allow small color-profile differences around (80, 210, 180).

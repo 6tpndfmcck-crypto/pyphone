@@ -8,10 +8,13 @@ STDLIB="$PROJECT_DIR/python-stdlib/python3.13"
 
 if [ "$EFFECTIVE_PLATFORM_NAME" = "-iphonesimulator" ]; then
   SLICE="ios-arm64_x86_64-simulator"
-  ARCH="${CURRENT_ARCH:-arm64}"
-  # Some Xcode aggregate/script phases report undefined_arch; arm64 is the
-  # correct default for current Apple-silicon simulator builds.
-  if [ "$ARCH" = "undefined_arch" ]; then ARCH="arm64"; fi
+  ARCH="${CURRENT_ARCH:-}"
+  # Xcode script phases can report undefined_arch. Use the target ARCHS before
+  # the host fallback so Intel/Rosetta simulator builds stage x86_64 modules.
+  if [ -z "$ARCH" ] || [ "$ARCH" = "undefined_arch" ]; then
+    ARCH="${ARCHS%% *}"
+    ARCH="${ARCH:-${NATIVE_ARCH_ACTUAL:-arm64}}"
+  fi
   LIBROOT="$XC/$SLICE/lib-$ARCH"
 else
   SLICE="ios-arm64"
