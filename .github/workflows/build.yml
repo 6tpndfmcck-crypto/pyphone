@@ -3,6 +3,7 @@ name: PyPhone iOS Build
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -71,6 +72,12 @@ jobs:
           path: app_packages
           key: pyphone-app-packages-v2-${{ runner.os }}-${{ runner.arch }}-py313-b16-${{ hashFiles('requirements.txt', '.github/workflows/build.yml') }}
 
+      - name: Cache pinned Pygame sources
+        uses: actions/cache@v4
+        with:
+          path: .build/pygame/source
+          key: pyphone-pygame-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/build_pygame_ios.py', 'scripts/pygame/CMakeLists.txt', 'scripts/build_sdl2_xcframework.sh', '.github/workflows/build.yml') }}
+
       - name: Install build tools
         id: toolchain
         shell: bash
@@ -81,6 +88,7 @@ jobs:
           else
             echo "Using preinstalled xcodegen"
           fi
+          if ! command -v cmake >/dev/null 2>&1; then brew install cmake; fi
           if ! command -v python3.13 >/dev/null 2>&1; then
             brew install python@3.13
           else
@@ -194,7 +202,7 @@ jobs:
           export PYTHONPYCACHEPREFIX=/tmp/pyphone-pycache
           rm -rf "$PYTHONPYCACHEPREFIX"
           if [ "${{ steps.host-python.outputs.cache-hit }}" != "true" ]; then
-            "$BUILD_PYTHON" -m pip install --only-binary=:all: "numpy==2.3.5" "helios-image==0.3.0"
+            "$BUILD_PYTHON" -m pip install --only-binary=:all: "numpy==2.3.5" "helios-image==0.3.0" "pygame==2.6.1"
           else
             echo "Using cached host NumPy and HeliOS test environment"
           fi
@@ -202,9 +210,21 @@ jobs:
           "$BUILD_PYTHON" scripts/test_contracts.py
           "$BUILD_PYTHON" scripts/test_runtime.py
           "$BUILD_PYTHON" scripts/test_regressions.py
+          "$BUILD_PYTHON" scripts/test_pygame.py
           test -f app_packages/numpy/__init__.py
           find app_packages/numpy -type f -name '*.so' -print -quit | grep -q .
           echo "Python runtime tests and NumPy package checks passed."
+
+      - name: Build native Pygame against the embedded SDL2
+        run: |
+          .build-venv/bin/python scripts/build_pygame_ios.py
+          test -f PygameDependencies.xcframework/Info.plist
+          test -f app_packages/pygame/__init__.py
+          test -f app_packages/pygame/freesansbold.ttf
+          for module in base surface display event font imageext mixer mixer_music; do
+            test -f "app_packages/pygame/$module.so"
+            xcrun otool -L "app_packages/pygame/$module.so"
+          done
 
       - name: Generate app icons and Xcode project
         shell: bash
@@ -292,6 +312,15 @@ jobs:
           test -f "$APP_PATH/python/lib/python3.13/datetime.py"
           test -f "$APP_PATH/app_packages/numpy/__init__.py"
           test -f "$APP_PATH/app_packages/numpy/_core/__init__.py"
+          test -f "$APP_PATH/Frameworks/PygameDependencies.framework/PygameDependencies"
+          test -f "$APP_PATH/app/pygame_ios.py"
+          test -f "$APP_PATH/app_packages/pygame/__init__.py"
+          test -f "$APP_PATH/app_packages/pygame/freesansbold.ttf"
+          for module in base surface display event font imageext mixer mixer_music; do
+            test -f "$APP_PATH/Frameworks/pygame.$module.framework/pygame.$module"
+            test -f "$APP_PATH/app_packages/pygame/$module.fwork"
+            xcrun otool -L "$APP_PATH/Frameworks/pygame.$module.framework/pygame.$module" | grep -F '@rpath/SDL2.framework/SDL2'
+          done
 
           for module in math _datetime; do
             test -f "$APP_PATH/Frameworks/$module.framework/$module" || {

@@ -363,7 +363,11 @@ Successfully processed wheels move to **Installed** and their contents are extra
 - Imported modules remain cached. Restart the app after changing installed package files or versions. There is no in-app uninstall screen; manage extracted package folders through iOS Files with the app closed.
 - Compiled extensions require compatible iOS binaries bundled through an app build. Installing a Python wrapper does not supply a missing native library.
 
-SDL2 is embedded as an iOS framework by the build workflow. PySDL2 library lookup is configured, but desktop window/event-loop behavior is not guaranteed. The PySDL2 framework-lookup compatibility patch runs at interpreter startup, so restart PyPhone after first installing PySDL2. PyPhone's built-in `ui` module and the current PyUI native backend do not require PySDL2. See [SDL2-iOS.md](SDL2-iOS.md) for the native framework build and integration limits.
+Pygame **2.6.1 is bundled natively**; use `import pygame` without installing a wheel. Open **Files → Examples → Pygame game** for a touch-controlled example. Standard software games use `pygame.display.set_mode(...)`, draw to the returned surface, read `pygame.event.get()`, and present with `pygame.display.flip()` or `update()`. The game opens in an SDL iOS window with a **Stop game** button. Completion, errors, and Stop close the game and restore the editor. Logical game sizes scale to fit the screen with letterboxing; touches generate mouse events, and SDL also provides finger events.
+
+Native surfaces, drawing, transforms, sprites, fonts (including the default font), PNG/JPEG images, NumPy surface arrays, and SDL_mixer audio are included. This integration supports software/SCALED displays; desktop OpenGL, camera, MIDI, and desktop window-management APIs are outside its scope. Game assets resolve relative to the Files folder. Use a frame limit such as `pygame.time.Clock().tick(60)`.
+
+SDL2 is embedded as an iOS framework by the build workflow and shared by Pygame and PySDL2. PySDL2 library lookup remains configured, but arbitrary PySDL2 applications need their own iOS-compatible event/rendering integration. The PySDL2 framework-lookup compatibility patch runs at interpreter startup, so restart PyPhone after first installing PySDL2. PyPhone's built-in `ui` module and the current PyUI native backend do not require PySDL2. See [SDL2-iOS.md](SDL2-iOS.md) for native build instructions and validation limits.
 
 ## Settings
 
@@ -484,7 +488,7 @@ The **PyPhone source checks** workflow runs host and simulator validation and up
 
 The [PyPhone iOS Build workflow](.github/workflows/build.yml) is the complete reference for staging and building the app. It runs on pushes to `main` and can also be started manually from Actions.
 
-A local device build needs more than `xcodegen generate`: stage the BeeWare **Python 3.13-b16** framework and standard library, prepare the iOS-target `app_packages`, build `SDL2.xcframework`, and generate the app icon assets first. The workflow records the exact download targets and preparation commands. See [scripts/install_python.sh](scripts/install_python.sh) for the post-build runtime installation and [SDL2-iOS.md](SDL2-iOS.md) for SDL2 preparation.
+A local device build needs more than `xcodegen generate`: stage the BeeWare **Python 3.13-b16** framework and standard library, prepare the iOS-target `app_packages`, build `SDL2.xcframework`, run `python3 scripts/build_pygame_ios.py` to build Pygame and `PygameDependencies.xcframework`, and generate the app icon assets first. The workflow records the exact download targets and preparation commands. See [scripts/install_python.sh](scripts/install_python.sh) for the post-build runtime installation and [SDL2-iOS.md](SDL2-iOS.md) for SDL2/Pygame preparation.
 
 The build creates an unsigned IPA and checks the packaged Python resources, NumPy, SDL2, native framework layout, IPA structure, ZIP integrity, and checksums. Signing and installation are separate from these checks.
 

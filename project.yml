@@ -20,6 +20,9 @@ targets:
       - framework: SDL2.xcframework
         embed: true
         codeSign: true
+      - framework: PygameDependencies.xcframework
+        embed: true
+        codeSign: true
     info:
       path: sources/Info.plist
       properties:
@@ -29,6 +32,7 @@ targets:
         UILaunchScreen: {}
         UIFileSharingEnabled: true
         LSSupportsOpeningInPlace: true
+        UIApplicationSupportsIndirectInputEvents: true
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationLandscapeLeft

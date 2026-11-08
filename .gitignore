@@ -4,6 +4,10 @@ __pycache__/
 build/
 py/
 Python.xcframework/
+SDL2.xcframework/
+PygameDependencies.xcframework/
+.build/
+.build-test-venv/
 PyPhone.xcodeproj/
 sources/Info.plist
 CodeWindow.xcodeproj/

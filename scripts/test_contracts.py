@@ -87,5 +87,15 @@ require("numpy==2.5.2.post1" in requirements.splitlines(),
 require("pip==25.2" in requirements.splitlines(),
         "pip must remain pinned as a PyPhone dependency")
 
+require("PygameDependencies.xcframework" in project and
+        "scripts/build_pygame_ios.py" in workflow,
+        "Native Pygame and its shared SDL addons must be built and embedded")
+require('PyImport_AppendInittab("_pyphone_pygame"' in bridge_m and
+        "pygame_ios.install()" in runner_py and "pygame_ios.cleanup()" in runner_py,
+        "Pygame needs its iOS bridge installed and cleaned up by the runner")
+require("pygame.$module.framework" in workflow and
+        "app_packages/pygame/freesansbold.ttf" in workflow,
+        "IPA packaging must verify native Pygame extensions and its default font")
+
 print("PyPhone cross-file interface and build-resource checks passed.")
 
