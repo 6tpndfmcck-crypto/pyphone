@@ -136,7 +136,7 @@ def main():
             run("xcrun", "--sdk", args.sdk, "clang", "-target", triple, "-isysroot", sdk,
                 "-dynamiclib", "-O2", "-fPIC", "-DSDL_MAIN_HANDLED=1", "-DSDL2=1",
                 "-I", python / "Headers", "-I", sdl / "Headers", "-I", source / "src_c",
-                "-I", checkout / "image", "-I", checkout / "ttf", "-I", checkout / "mixer/include",
+                "-I", checkout / "image/include", "-I", checkout / "ttf", "-I", checkout / "mixer/include",
                 "-F", python.parent, "-framework", "Python", "-F", sdl.parent, "-framework", "SDL2",
                 "-F", dependency.parent, "-framework", "PygameDependencies",
                 "-Wl,-rpath,@executable_path/Frameworks",

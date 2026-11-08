@@ -11,6 +11,8 @@ static UIWindow *gameWindow;
 static UIButton *gameStop;
 static unsigned long gameThread;
 static unsigned long gameGeneration;
+static NSString *previousRenderer;
+static BOOL prepared;
 
 static PyObject *callMain(PyObject *self, PyObject *args) {
     PyObject *function, *positional, *keywords;
@@ -41,6 +43,8 @@ static PyObject *callMain(PyObject *self, PyObject *args) {
 }
 
 static PyObject *prepare(PyObject *self, PyObject *unused) {
+    if (prepared) Py_RETURN_NONE;
+    prepared = YES;
     if (!editorWindow) {
         for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
             if (![scene isKindOfClass:UIWindowScene.class] ||
@@ -52,6 +56,8 @@ static PyObject *prepare(PyObject *self, PyObject *unused) {
         }
     }
     SDL_SetMainReady();
+    const char *renderer = SDL_GetHint(SDL_HINT_RENDER_DRIVER);
+    previousRenderer = renderer ? [NSString stringWithUTF8String:renderer] : nil;
     SDL_SetHint(SDL_HINT_RENDER_DRIVER, "metal");
     // SwiftUI owns UIApplication and its run loop. Avoid re-entering that run
     // loop while dispatch_sync is executing a Pygame call with the GIL held.
@@ -119,6 +125,8 @@ static PyObject *show(PyObject *self, PyObject *unused) {
 }
 
 static PyObject *restore(PyObject *self, PyObject *unused) {
+    if (!prepared) Py_RETURN_NONE;
+    prepared = NO;
     gameWindow.hidden = YES;
     gameWindow = nil;
     gameStop = nil;
@@ -126,6 +134,10 @@ static PyObject *restore(PyObject *self, PyObject *unused) {
     editorWindow = nil;
     gameThread = 0;
     gameGeneration++;
+    if (previousRenderer) SDL_SetHint(SDL_HINT_RENDER_DRIVER, previousRenderer.UTF8String);
+    else SDL_ResetHint(SDL_HINT_RENDER_DRIVER);
+    previousRenderer = nil;
+    SDL_iPhoneSetEventPump(SDL_TRUE);
     Py_RETURN_NONE;
 }
 

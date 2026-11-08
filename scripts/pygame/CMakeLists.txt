@@ -4,9 +4,12 @@ project(PyPhonePygameDependencies LANGUAGES C OBJC)
 # Both SDL aliases deliberately resolve to PyPhone's existing dynamic framework.
 # Never compile a second SDL into an addon or an extension module.
 add_library(SDL2::SDL2 SHARED IMPORTED GLOBAL)
+get_filename_component(SDL_FRAMEWORK_PARENT "${SDL_FRAMEWORK}" DIRECTORY)
 set_target_properties(SDL2::SDL2 PROPERTIES
+    FRAMEWORK TRUE
     IMPORTED_LOCATION "${SDL_FRAMEWORK}/SDL2"
-    INTERFACE_INCLUDE_DIRECTORIES "${SDL_FRAMEWORK}/Headers")
+    INTERFACE_INCLUDE_DIRECTORIES "${SDL_FRAMEWORK}/Headers"
+    INTERFACE_COMPILE_OPTIONS "-F${SDL_FRAMEWORK_PARENT}")
 add_library(SDL2::SDL2-static ALIAS SDL2::SDL2)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 set(SDL2IMAGE_INSTALL OFF CACHE BOOL "" FORCE)
