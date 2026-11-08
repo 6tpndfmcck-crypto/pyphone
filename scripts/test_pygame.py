@@ -142,6 +142,12 @@ for _ in range(2):
     output = wait_done()
     assert "pygame-ok" in output and "ERROR" not in output, output
 
+# display.quit() closes video only. Runner cleanup must still release audio and
+# other initialized Pygame subsystems when the script ends afterward.
+runner.run_code('import pygame\npygame.init()\npygame.display.set_mode((96, 64))\npygame.display.quit()\n')
+assert "ERROR" not in wait_done()
+assert pygame.mixer.get_init() is None, "display.quit() prevented full game cleanup"
+
 # A failed SDL call must propagate through the UI queue into friendly errors.
 runner.run_code('import pygame\npygame.display.set_mode((-1, 64))\n')
 assert "ERROR" in wait_done()

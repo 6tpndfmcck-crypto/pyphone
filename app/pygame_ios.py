@@ -13,6 +13,7 @@ from pathlib import Path
 _pygame = None
 _native = None
 _active = False
+_prepared = False
 
 
 def install():
@@ -32,14 +33,16 @@ def install():
 
     pygame.sysfont.initsysfonts_unix = bundled_fonts
 
-    def on_main(function, *, prepare=False, show=False, restore=False):
+    def on_main(function, *, prepare=False, show=False, restore=False, finish=False):
         @functools.wraps(function)
         def invoke(*args, **kwargs):
-            global _active
-            if prepare and not _active:
+            global _active, _prepared
+            if prepare:
                 _active = True
-                _native.call_main(_native.prepare, (), {})
-                _native.call_main(_native.set_thread, (threading.get_ident(),), {})
+                if not _prepared:
+                    _prepared = True
+                    _native.call_main(_native.prepare, (), {})
+                    _native.call_main(_native.set_thread, (threading.get_ident(),), {})
             try:
                 result = _native.call_main(function, args, kwargs)
                 if show:
@@ -50,7 +53,9 @@ def install():
                     try:
                         _native.call_main(_native.restore, (), {})
                     finally:
-                        _active = False
+                        _prepared = False
+                        if finish:
+                            _active = False
         return invoke
 
     # Keep types (Event, Cursor, etc.) intact. Wrap only native functions.
@@ -93,7 +98,7 @@ def install():
 
     pygame.display.set_mode = set_mode
     pygame.init = on_main(pygame.init, prepare=True)
-    pygame.quit = on_main(pygame.quit, restore=True)
+    pygame.quit = on_main(pygame.quit, restore=True, finish=True)
     pygame.base.init = pygame.init
     pygame.base.quit = pygame.quit
 

@@ -404,6 +404,7 @@ jobs:
           compression-level: 0
 
       - name: Build and test real Pygame gameplay in the iOS simulator
+        timeout-minutes: 30
         shell: bash
         run: |
           set -euo pipefail
@@ -425,6 +426,12 @@ jobs:
           print(next((d for d in devices if d["state"] == "Booted"), devices[0])["udid"])
           PY
           )"
+          if ! xcrun simctl list devices booted | grep -Fq "$SIMULATOR_ID"; then
+            xcrun simctl boot "$SIMULATOR_ID"
+          fi
+          open -a Simulator --args -CurrentDeviceUDID "$SIMULATOR_ID"
+          xcrun simctl bootstatus "$SIMULATOR_ID" -b
+          xcrun simctl io "$SIMULATOR_ID" screenshot "$RUNNER_TEMP/pygame-simulator-ready.png"
           xcodebuild test -project PyPhone.xcodeproj -scheme PyPhonePygameChecks \
             -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
             -derivedDataPath build-pygame-simulator \

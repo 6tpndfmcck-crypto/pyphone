@@ -103,7 +103,12 @@ final class ScrollingTests: XCTestCase {
     @MainActor
     func testTypingPastLine64DoesNotRehighlightFromTop() async throws {
         let code = (1...150).map { "print('Line \($0)')" }.joined(separator: "\n")
-        let host = UIHostingController(rootView: CodeEditor(text: .constant(code)))
+        // Match the production editor's bounded viewport. An unconstrained
+        // representable can expand to the document height and cannot scroll.
+        let host = UIHostingController(rootView: GeometryReader { viewport in
+            CodeEditor(text: .constant(code))
+                .frame(width: viewport.size.width, height: viewport.size.height)
+        })
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         window.rootViewController = host
         window.makeKeyAndVisible()
