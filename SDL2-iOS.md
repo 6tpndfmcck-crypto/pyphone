@@ -79,6 +79,11 @@ The IPA workflow cross-compiles Pygame, verifies the embedded dependency
 framework, default font, each core native module and SDL linkage, and all
 `.fwork`/`.origin` targets. Startup preflight imports the required native
 modules and checks an actual Surface operation without opening a window.
+After uploading the device IPA, the workflow stages simulator NumPy and
+Pygame binaries and runs `pygame-tests.yml` against the actual app. Its UI test
+opens the example, checks screenshots for rendered ball pixels, taps the SDL
+view, and stops/reopens the game. Screenshot evidence is uploaded separately;
+device packages are restored before cache saving.
 On an iPhone, run the Pygame example, tap to move the ball, rotate the device,
 background/foreground the app, then Stop and run it again. Also test a game
 that throws an exception or ends without `pygame.quit()`, and confirm normal

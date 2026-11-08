@@ -403,6 +403,59 @@ jobs:
           retention-days: 14
           compression-level: 0
 
+      - name: Build and test real Pygame gameplay in the iOS simulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Keep device packages intact for their cache and the already-uploaded IPA.
+          mv app_packages app_packages-device
+          .build-venv/bin/python -m pip install -r requirements.txt --target app_packages \
+            --platform ios_13_0_x86_64_iphonesimulator --implementation cp \
+            --python-version 3.13 --abi cp313 --only-binary=:all: \
+            --extra-index-url https://pypi.anaconda.org/beeware/simple
+          rm -rf app_packages/bin
+          .build-venv/bin/python scripts/build_pygame_ios.py --sdk iphonesimulator --archs x86_64
+          xcodegen generate --spec pygame-tests.yml
+          xcrun simctl list devices available --json > "$RUNNER_TEMP/pygame-simulators.json"
+          SIMULATOR_ID="$(.build-venv/bin/python - "$RUNNER_TEMP/pygame-simulators.json" <<'PY'
+          import json, sys
+          devices = [d for group in json.load(open(sys.argv[1]))["devices"].values() for d in group
+                     if d.get("isAvailable") and d["name"].startswith("iPhone")]
+          assert devices, "No iPhone simulator is installed"
+          print(next((d for d in devices if d["state"] == "Booted"), devices[0])["udid"])
+          PY
+          )"
+          xcodebuild test -project PyPhone.xcodeproj -scheme PyPhonePygameChecks \
+            -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
+            -derivedDataPath build-pygame-simulator \
+            -resultBundlePath "$RUNNER_TEMP/PyPhone-Pygame.xcresult" \
+            -parallel-testing-enabled NO CODE_SIGNING_ALLOWED=NO 2>&1 | tee pygame-simulator.log
+
+      - name: Restore device packages after simulator test
+        if: always()
+        run: |
+          if [ -d app_packages-device ]; then
+            rm -rf app_packages
+            mv app_packages-device app_packages
+          fi
+
+      - name: Export Pygame simulator screenshots
+        if: always()
+        run: |
+          if [ -d "$RUNNER_TEMP/PyPhone-Pygame.xcresult" ]; then
+            xcrun xcresulttool export attachments --path "$RUNNER_TEMP/PyPhone-Pygame.xcresult" --output-path "$RUNNER_TEMP/pygame-screenshots"
+          fi
+
+      - name: Upload Pygame simulator evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pyphone-pygame-simulator
+          path: |
+            ${{ runner.temp }}/pygame-screenshots/
+            pygame-simulator.log
+          if-no-files-found: ignore
+
       - name: Upload failed build logs
         if: failure()
         uses: actions/upload-artifact@v4

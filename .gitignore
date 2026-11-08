@@ -8,6 +8,9 @@ SDL2.xcframework/
 PygameDependencies.xcframework/
 .build/
 .build-test-venv/
+app_packages-device/
+build-pygame-simulator/
+pygame-simulator.log
 PyPhone.xcodeproj/
 sources/Info.plist
 CodeWindow.xcodeproj/
