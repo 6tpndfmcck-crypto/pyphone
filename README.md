@@ -1,6 +1,6 @@
 # PyPhone
 
-A native Python workspace for iPhone. Write, run, and organize Python scripts on iOS with **CPython 3.13**, **NumPy**, an autosaving editor, and a Console that supports text, input, and animated images.
+A native Python workspace for iPhone. Write, run, and organize Python scripts on iOS with **CPython 3.13**, **NumPy**, **Pygame**, an autosaving editor, and a Console that supports text, input, and animated images.
 
 **Requires iOS 16 or later.** The project builds an unsigned IPA for installation through your own signing or app-container setup. Editing and running local scripts work offline once the app and any required packages are installed.
 
@@ -325,6 +325,9 @@ PyPhone embeds CPython 3.13 and an iOS-compatible standard library. The build pi
 | pip | `25.2` | Bundled Python packaging tooling. |
 | certifi | `2025.1.31` | Certificate authorities used for HTTPS package downloads. |
 
+Pygame `2.6.1` is also bundled; its native iOS source build is pinned in
+[scripts/build_pygame_ios.py](scripts/build_pygame_ios.py) and shares the existing SDL2 framework.
+
 HeliOS, PyUI, and Colorama are optional installations, not bundled requirements. Import names can differ from distribution names: install `helios-image`, then `import helios`; PyUI's distribution name is `pyui-toolkit`, with `import pyui`.
 
 ### Installing from PyPI
@@ -412,7 +415,7 @@ else:
 print("\x1b[32mGreen text\x1b[0m and normal text")
 ```
 
-Additional starter source for greetings, a number game, native UI controls, and NumPy is in [sources/Examples.swift](sources/Examples.swift). There is no examples browser in the current app; copy an example into a new script to try it.
+Try the Pygame game from **Files → Examples**. Additional starter source for greetings, a number game, native UI controls, and NumPy is in [sources/Examples.swift](sources/Examples.swift); copy one of those examples into a new script to try it.
 
 ## Troubleshooting
 
@@ -459,14 +462,15 @@ With Python 3.13, from the repository root:
 ```bash
 python3.13 -m venv .build-venv
 source .build-venv/bin/activate
-python -m pip install --only-binary=:all: "numpy==2.3.5" "helios-image==0.3.0"
-python -m py_compile app/runner.py app/ui.py scripts/test_contracts.py scripts/test_runtime.py scripts/test_regressions.py
+python -m pip install --only-binary=:all: "numpy==2.3.5" "helios-image==0.3.0" "pygame==2.6.1"
+python -m py_compile app/runner.py app/ui.py app/pygame_ios.py scripts/build_pygame_ios.py scripts/test_pygame.py scripts/test_contracts.py scripts/test_runtime.py scripts/test_regressions.py
 python scripts/test_contracts.py
 python scripts/test_runtime.py
 python scripts/test_regressions.py
+python scripts/test_pygame.py
 ```
 
-Host NumPy `2.3.5` is used for these checks; the packaged iOS NumPy wheel is pinned separately. HeliOS enables the real RGBA/paste/resize animation regression. Tests cover bridge contracts, execution, prompts, callbacks, errors, bounded output, package installation, local imports, and image identity/deltas.
+Host NumPy `2.3.5` is used for these checks; the packaged iOS NumPy wheel is pinned separately. HeliOS enables the real RGBA/paste/resize animation regression. Tests cover bridge contracts, execution, prompts, callbacks, errors, bounded output, package installation, local imports, image identity/deltas, and the Pygame thread adapter. See [SDL2-iOS.md](SDL2-iOS.md) for the real simulator gameplay test and its screenshot evidence.
 
 ### Simulator checks
 
@@ -490,7 +494,7 @@ The [PyPhone iOS Build workflow](.github/workflows/build.yml) is the complete re
 
 A local device build needs more than `xcodegen generate`: stage the BeeWare **Python 3.13-b16** framework and standard library, prepare the iOS-target `app_packages`, build `SDL2.xcframework`, run `python3 scripts/build_pygame_ios.py` to build Pygame and `PygameDependencies.xcframework`, and generate the app icon assets first. The workflow records the exact download targets and preparation commands. See [scripts/install_python.sh](scripts/install_python.sh) for the post-build runtime installation and [SDL2-iOS.md](SDL2-iOS.md) for SDL2/Pygame preparation.
 
-The build creates an unsigned IPA and checks the packaged Python resources, NumPy, SDL2, native framework layout, IPA structure, ZIP integrity, and checksums. Signing and installation are separate from these checks.
+The build creates an unsigned IPA and checks the packaged Python resources, NumPy, SDL2, Pygame modules/fonts/dependencies, native framework layout, IPA structure, ZIP integrity, and checksums. Signing and installation are separate from these checks.
 
 The workflow caches the prepared Python runtime, pinned host test dependencies, iOS package downloads, and compiler modules. Host-environment and compiler caches are tied to the exact toolchain and runner image; dependency or staging changes invalidate the relevant caches. App products and target object files are rebuilt from the current source, and all runtime and packaging checks still run. The first build after a cache miss can take longer while caches fill.
 
@@ -511,7 +515,7 @@ The workflow caches the prepared Python runtime, pinned host test dependencies, 
 PyPhone runs Python inside an iOS app sandbox. Standard language features and compatible packages work within that environment, with these practical limits:
 
 - The Console is not a system shell, and subprocesses, external executables, and desktop-style process management may be unavailable.
-- Desktop native wheels, arbitrary GUI toolkits, and desktop window/event-loop assumptions do not automatically work on iOS. PyPhone's `ui` controls and Console images are its supported built-in display paths.
+- Desktop native wheels, arbitrary GUI toolkits, and desktop window/event-loop assumptions do not automatically work on iOS. Supported display paths are native `ui` controls, Console images, and Pygame software/SCALED games through the SDL2 iOS bridge. Desktop OpenGL games are unsupported.
 - Each Run gets fresh script globals, while imports can retain state in the shared interpreter.
 - The in-app script list is for top-level `.py` files; use iOS Files for folders and other resources.
 - Console text and image caches are bounded, so exported files are the place for long-term results.

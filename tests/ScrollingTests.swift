@@ -121,9 +121,18 @@ final class ScrollingTests: XCTestCase {
         editor.layoutManager.ensureLayout(for: editor.textContainer)
         let start = editor.gutter.lineStarts[99]
         editor.selectedRange = NSRange(location: start, length: 0)
-        editor.scrollRangeToVisible(editor.selectedRange)
         editor.layoutIfNeeded()
         try await Task.sleep(nanoseconds: 100_000_000)
+        editor.layoutIfNeeded()
+        // Position the viewport explicitly after first-responder/keyboard layout.
+        // This regression checks typing in scrollback, not UIKit's asynchronous
+        // scrollRangeToVisible behavior for an empty caret range.
+        XCTAssertGreaterThan(editor.contentSize.height, editor.bounds.height)
+        let glyph = editor.layoutManager.glyphIndexForCharacter(at: start)
+        let lineRect = editor.layoutManager.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
+        let offset = min(max(0, lineRect.minY - editor.bounds.height / 2),
+                         editor.contentSize.height - editor.bounds.height)
+        editor.setContentOffset(CGPoint(x: 0, y: offset), animated: false)
         editor.layoutIfNeeded()
         XCTAssertGreaterThan(editor.contentOffset.y, 0)
 

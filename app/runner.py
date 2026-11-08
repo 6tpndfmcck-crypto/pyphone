@@ -280,8 +280,6 @@ _patch_pysdl2_ios_framework_lookup()
 import ui
 import pygame_ios
 
-pygame_ios.install()
-
 _run_tid = [0]
 _run_lock = threading.RLock()
 _running = [False]
@@ -329,6 +327,9 @@ def check_runtime(_=""):
     if int(probe.sum()) != 6:
         raise RuntimeError("NumPy failed its smoke test")
     if sys.platform == "ios":
+        # Pygame imports NumPy-backed modules too. Keep those imports in this
+        # existing background preflight so the editor can render at startup.
+        pygame_ios.install()
         import pygame
         surface = pygame.Surface((2, 2))
         surface.fill((12, 34, 56))
