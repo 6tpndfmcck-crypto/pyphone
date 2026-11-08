@@ -13,6 +13,17 @@ static unsigned long gameThread;
 static unsigned long gameGeneration;
 static NSString *previousRenderer;
 static BOOL prepared;
+static NSMutableArray *lifecycleObservers;
+
+static void observeLifecycle(NSNotificationName name, void (*callback)(void)) {
+    id observer = [NSNotificationCenter.defaultCenter addObserverForName:name object:nil
+        queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *notification) {
+            PyGILState_STATE gil = PyGILState_Ensure();
+            if (prepared) callback();
+            PyGILState_Release(gil);
+        }];
+    [lifecycleObservers addObject:observer];
+}
 
 static PyObject *callMain(PyObject *self, PyObject *args) {
     PyObject *function, *positional, *keywords;
@@ -62,6 +73,16 @@ static PyObject *prepare(PyObject *self, PyObject *unused) {
     // SwiftUI owns UIApplication and its run loop. Avoid re-entering that run
     // loop while dispatch_sync is executing a Pygame call with the GIL held.
     SDL_iPhoneSetEventPump(SDL_FALSE);
+    // Disabling SDL's nested pump also removes its lifecycle observers. Forward
+    // notifications explicitly while SwiftUI owns the application run loop.
+    lifecycleObservers = [NSMutableArray array];
+    observeLifecycle(UIApplicationDidBecomeActiveNotification, SDL_OnApplicationDidBecomeActive);
+    observeLifecycle(UIApplicationWillResignActiveNotification, SDL_OnApplicationWillResignActive);
+    observeLifecycle(UIApplicationDidEnterBackgroundNotification, SDL_OnApplicationDidEnterBackground);
+    observeLifecycle(UIApplicationWillEnterForegroundNotification, SDL_OnApplicationWillEnterForeground);
+    observeLifecycle(UIApplicationWillTerminateNotification, SDL_OnApplicationWillTerminate);
+    observeLifecycle(UIApplicationDidReceiveMemoryWarningNotification, SDL_OnApplicationDidReceiveMemoryWarning);
+    observeLifecycle(UIApplicationDidChangeStatusBarOrientationNotification, SDL_OnApplicationDidChangeStatusBarOrientation);
     Py_RETURN_NONE;
 }
 
@@ -137,6 +158,8 @@ static PyObject *restore(PyObject *self, PyObject *unused) {
     if (previousRenderer) SDL_SetHint(SDL_HINT_RENDER_DRIVER, previousRenderer.UTF8String);
     else SDL_ResetHint(SDL_HINT_RENDER_DRIVER);
     previousRenderer = nil;
+    for (id observer in lifecycleObservers) [NSNotificationCenter.defaultCenter removeObserver:observer];
+    lifecycleObservers = nil;
     SDL_iPhoneSetEventPump(SDL_TRUE);
     Py_RETURN_NONE;
 }

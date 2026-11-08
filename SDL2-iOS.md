@@ -58,6 +58,8 @@ handling instead of attempting to launch the desktop fontconfig subprocess.
 
 SDL is initialized with `SDL_SetMainReady()` while SwiftUI keeps ownership of
 UIApplication. SDL's nested iOS event pump is disabled. The native bridge
+forwards lifecycle/orientation notifications explicitly while that pump is off,
+then restores SDL's event pump and renderer hint after the game closes. It
 attaches SDL's UIKit window to the editor's active window scene, adds a Stop
 button, and restores the original key window on teardown. Positive game sizes
 use fullscreen SCALED mode with aspect-preserving letterboxing and SDL's
