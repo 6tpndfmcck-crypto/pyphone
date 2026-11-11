@@ -42,6 +42,40 @@ print("Your interface is ready in Window.")
 """#
 
     static let all: [ScriptExample] = [
+        ScriptExample(name: "pygame_game", title: "Pygame game", detail: "Native graphics and touch", symbol: "gamecontroller", code: #"""
+import pygame
+
+pygame.init()
+screen = pygame.display.set_mode((360, 640))
+pygame.display.set_caption("PyPhone Pygame")
+clock = pygame.time.Clock()
+font = pygame.font.Font(None, 28)
+position = pygame.Vector2(180, 320)
+velocity = pygame.Vector2(110, 150)
+playing = True
+
+try:
+    while playing:
+        dt = min(clock.tick(60) / 1000, 0.05)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                playing = False
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                position.update(event.pos)
+        position += velocity * dt
+        if position.x < 20 or position.x > 340:
+            velocity.x *= -1
+            position.x = max(20, min(340, position.x))
+        if position.y < 80 or position.y > 620:
+            velocity.y *= -1
+            position.y = max(80, min(620, position.y))
+        screen.fill((18, 22, 34))
+        screen.blit(font.render("Tap to move the ball", True, "white"), (20, 48))
+        pygame.draw.circle(screen, (80, 210, 180), position, 20)
+        pygame.display.flip()
+finally:
+    pygame.quit()
+"""#),
         ScriptExample(name: "hello", title: "Hello, Python", detail: "Print and input", symbol: "hand.wave", code: welcome),
         ScriptExample(name: "number_game", title: "Guess the number", detail: "Loops, input, and booleans", symbol: "dice", code: #"""
 import random

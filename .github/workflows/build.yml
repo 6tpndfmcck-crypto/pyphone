@@ -3,6 +3,7 @@ name: PyPhone iOS Build
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -71,6 +72,12 @@ jobs:
           path: app_packages
           key: pyphone-app-packages-v2-${{ runner.os }}-${{ runner.arch }}-py313-b16-${{ hashFiles('requirements.txt', '.github/workflows/build.yml') }}
 
+      - name: Cache pinned Pygame sources
+        uses: actions/cache@v4
+        with:
+          path: .build/pygame/source
+          key: pyphone-pygame-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/build_pygame_ios.py', 'scripts/pygame/CMakeLists.txt', 'scripts/build_sdl2_xcframework.sh', '.github/workflows/build.yml') }}
+
       - name: Install build tools
         id: toolchain
         shell: bash
@@ -81,6 +88,7 @@ jobs:
           else
             echo "Using preinstalled xcodegen"
           fi
+          if ! command -v cmake >/dev/null 2>&1; then brew install cmake; fi
           if ! command -v python3.13 >/dev/null 2>&1; then
             brew install python@3.13
           else
@@ -194,7 +202,7 @@ jobs:
           export PYTHONPYCACHEPREFIX=/tmp/pyphone-pycache
           rm -rf "$PYTHONPYCACHEPREFIX"
           if [ "${{ steps.host-python.outputs.cache-hit }}" != "true" ]; then
-            "$BUILD_PYTHON" -m pip install --only-binary=:all: "numpy==2.3.5" "helios-image==0.3.0"
+            "$BUILD_PYTHON" -m pip install --only-binary=:all: "numpy==2.3.5" "helios-image==0.3.0" "pygame==2.6.1"
           else
             echo "Using cached host NumPy and HeliOS test environment"
           fi
@@ -202,9 +210,21 @@ jobs:
           "$BUILD_PYTHON" scripts/test_contracts.py
           "$BUILD_PYTHON" scripts/test_runtime.py
           "$BUILD_PYTHON" scripts/test_regressions.py
+          "$BUILD_PYTHON" scripts/test_pygame.py
           test -f app_packages/numpy/__init__.py
           find app_packages/numpy -type f -name '*.so' -print -quit | grep -q .
           echo "Python runtime tests and NumPy package checks passed."
+
+      - name: Build native Pygame against the embedded SDL2
+        run: |
+          .build-venv/bin/python scripts/build_pygame_ios.py
+          test -f PygameDependencies.xcframework/Info.plist
+          test -f app_packages/pygame/__init__.py
+          test -f app_packages/pygame/freesansbold.ttf
+          for module in base surface display event font imageext mixer mixer_music; do
+            test -f "app_packages/pygame/$module.so"
+            xcrun otool -L "app_packages/pygame/$module.so"
+          done
 
       - name: Generate app icons and Xcode project
         shell: bash
@@ -292,6 +312,15 @@ jobs:
           test -f "$APP_PATH/python/lib/python3.13/datetime.py"
           test -f "$APP_PATH/app_packages/numpy/__init__.py"
           test -f "$APP_PATH/app_packages/numpy/_core/__init__.py"
+          test -f "$APP_PATH/Frameworks/PygameDependencies.framework/PygameDependencies"
+          test -f "$APP_PATH/app/pygame_ios.py"
+          test -f "$APP_PATH/app_packages/pygame/__init__.py"
+          test -f "$APP_PATH/app_packages/pygame/freesansbold.ttf"
+          for module in base surface display event font imageext mixer mixer_music; do
+            test -f "$APP_PATH/Frameworks/pygame.$module.framework/pygame.$module"
+            test -f "$APP_PATH/app_packages/pygame/$module.fwork"
+            xcrun otool -L "$APP_PATH/Frameworks/pygame.$module.framework/pygame.$module" | grep -F '@rpath/SDL2.framework/SDL2'
+          done
 
           for module in math _datetime; do
             test -f "$APP_PATH/Frameworks/$module.framework/$module" || {
@@ -373,6 +402,66 @@ jobs:
           if-no-files-found: error
           retention-days: 14
           compression-level: 0
+
+      - name: Build and test real Pygame gameplay in the iOS simulator
+        timeout-minutes: 30
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Keep device packages intact for their cache and the already-uploaded IPA.
+          mv app_packages app_packages-device
+          .build-venv/bin/python -m pip install -r requirements.txt --target app_packages \
+            --platform ios_13_0_x86_64_iphonesimulator --implementation cp \
+            --python-version 3.13 --abi cp313 --only-binary=:all: \
+            --extra-index-url https://pypi.anaconda.org/beeware/simple
+          rm -rf app_packages/bin
+          .build-venv/bin/python scripts/build_pygame_ios.py --sdk iphonesimulator --archs x86_64
+          xcodegen generate --spec pygame-tests.yml
+          xcrun simctl list devices available --json > "$RUNNER_TEMP/pygame-simulators.json"
+          SIMULATOR_ID="$(.build-venv/bin/python - "$RUNNER_TEMP/pygame-simulators.json" <<'PY'
+          import json, sys
+          devices = [d for group in json.load(open(sys.argv[1]))["devices"].values() for d in group
+                     if d.get("isAvailable") and d["name"].startswith("iPhone")]
+          assert devices, "No iPhone simulator is installed"
+          print(next((d for d in devices if d["state"] == "Booted"), devices[0])["udid"])
+          PY
+          )"
+          if ! xcrun simctl list devices booted | grep -Fq "$SIMULATOR_ID"; then
+            xcrun simctl boot "$SIMULATOR_ID"
+          fi
+          open -a Simulator --args -CurrentDeviceUDID "$SIMULATOR_ID"
+          xcrun simctl bootstatus "$SIMULATOR_ID" -b
+          xcrun simctl io "$SIMULATOR_ID" screenshot "$RUNNER_TEMP/pygame-simulator-ready.png"
+          xcodebuild test -project PyPhone.xcodeproj -scheme PyPhonePygameChecks \
+            -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
+            -derivedDataPath build-pygame-simulator \
+            -resultBundlePath "$RUNNER_TEMP/PyPhone-Pygame.xcresult" \
+            -parallel-testing-enabled NO CODE_SIGNING_ALLOWED=NO 2>&1 | tee pygame-simulator.log
+
+      - name: Restore device packages after simulator test
+        if: always()
+        run: |
+          if [ -d app_packages-device ]; then
+            rm -rf app_packages
+            mv app_packages-device app_packages
+          fi
+
+      - name: Export Pygame simulator screenshots
+        if: always()
+        run: |
+          if [ -d "$RUNNER_TEMP/PyPhone-Pygame.xcresult" ]; then
+            xcrun xcresulttool export attachments --path "$RUNNER_TEMP/PyPhone-Pygame.xcresult" --output-path "$RUNNER_TEMP/pygame-screenshots"
+          fi
+
+      - name: Upload Pygame simulator evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pyphone-pygame-simulator
+          path: |
+            ${{ runner.temp }}/pygame-screenshots/
+            pygame-simulator.log
+          if-no-files-found: ignore
 
       - name: Upload failed build logs
         if: failure()

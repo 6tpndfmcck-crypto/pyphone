@@ -1,5 +1,11 @@
 # Unreleased
 
+Bundle native Pygame 2.6.1 against the existing SDL2 framework, including fonts,
+image loading/saving and mixer audio. Route video/input through the UIKit main
+thread, attach SDL's window to the SwiftUI scene, scale software game surfaces,
+and restore the editor after completion, errors, or Stop. Add a touch game
+example, native build/IPA checks, and host render/input/interruption regressions.
+
 Console images now animate in place: `ui.image()` creates one display and
 `.set(frame)` replaces its latest frame using the same ID. Added adaptive
 refresh targeting 30 FPS, background decoding, delta image transport, and

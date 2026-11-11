@@ -1,6 +1,8 @@
 #import "PythonBridge.h"
 #include <Python/Python.h>
 
+extern PyObject *PyInit__pyphone_pygame(void);
+
 static NSString *exceptionText(void) {
     PyObject *exc = PyErr_GetRaisedException();
     if (!exc) return @"unknown Python error";
@@ -105,6 +107,11 @@ static NSString *exceptionText(void) {
         // Point to Frameworks, not SDL2.framework itself.
         setenv("PYSDL2_DLL_PATH", frameworks.path.UTF8String, 1);
     }
+
+    if (PyImport_AppendInittab("_pyphone_pygame", PyInit__pyphone_pygame) == -1) {
+        return @"could not register the native Pygame bridge";
+    }
+    setenv("PYGAME_HIDE_SUPPORT_PROMPT", "1", 1);
 
     PyStatus status;
     PyPreConfig pre;

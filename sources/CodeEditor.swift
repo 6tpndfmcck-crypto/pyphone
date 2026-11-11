@@ -10,7 +10,7 @@ enum Vocab {
         words("False None True and as assert async await break case class continue def del elif else except finally for from global if import in is lambda match nonlocal not or pass raise return try while with yield")
         + words("abs all any bin bool bytes callable chr dict dir divmod enumerate eval exec filter float format frozenset getattr globals hasattr hash hex id input int isinstance issubclass iter len list locals map max min next object oct open ord pow print property range repr reversed round set setattr slice sorted staticmethod str sum super tuple type vars zip")
         + words("Exception ValueError TypeError KeyError IndexError RuntimeError StopIteration KeyboardInterrupt ZeroDivisionError AttributeError ImportError NameError OSError")
-        + words("math random time json os sys datetime re string numpy np collections itertools functools threading statistics decimal fractions copy textwrap base64 hashlib uuid pathlib typing dataclasses enum csv sqlite3 urllib heapq bisect pilIOS pyUI colorama sdl2")
+        + words("math random time json os sys datetime re string numpy np collections itertools functools threading statistics decimal fractions copy textwrap base64 hashlib uuid pathlib typing dataclasses enum csv sqlite3 urllib heapq bisect pilIOS pyUI colorama sdl2 pygame")
         + words("ui label entry button clear")
 
     static let generic: [String] = words("append extend insert remove pop sort reverse index count join split strip lstrip rstrip replace upper lower title capitalize format startswith endswith find keys values items get update add copy clear isdigit isalpha")
@@ -32,6 +32,7 @@ enum Vocab {
         "pilIOS": words("Image new save open load draw pixel line rectangle ellipse text resize crop rotate paste getpixel putpixel"),
         "colorama": words("Fore Back Style init just_fix_windows_console RESET BLACK RED GREEN YELLOW BLUE MAGENTA CYAN WHITE LIGHTBLACK_EX LIGHTRED_EX LIGHTGREEN_EX LIGHTYELLOW_EX LIGHTBLUE_EX LIGHTMAGENTA_EX LIGHTCYAN_EX LIGHTWHITE_EX BRIGHT DIM NORMAL"),
         "sdl2": words("SDL_Init SDL_Quit SDL_GetError SDL_GetVersion SDL_INIT_VIDEO SDL_INIT_AUDIO SDL_CreateWindow SDL_DestroyWindow SDL_PollEvent SDL_Delay SDL_WINDOW_SHOWN SDL_WINDOWPOS_CENTERED"),
+        "pygame": words("init quit display event draw time image font mixer Surface Rect Color Vector2 Vector3 sprite transform key mouse QUIT KEYDOWN KEYUP MOUSEBUTTONDOWN MOUSEBUTTONUP MOUSEMOTION FINGERDOWN FINGERUP FINGERMOTION SCALED"),
     ]
 
     static let symbols: [String] = ["(", ")", ":", "\"", "'", "=", "[", "]", "{", "}", "_", "#", ".", ",", "+", "-", "*", "/", "%", "<", ">"]

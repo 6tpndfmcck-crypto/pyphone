@@ -1,0 +1,25 @@
+include:
+  - project.yml
+targets:
+  PyPhonePygameUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - tests/PygameUITests.swift
+    dependencies:
+      - target: PyPhone
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.pyphone.pygame-uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: PyPhone
+        SWIFT_VERSION: "5.0"
+schemes:
+  PyPhonePygameChecks:
+    build:
+      targets:
+        PyPhone: all
+        PyPhonePygameUITests: [test]
+    test:
+      targets:
+        - PyPhonePygameUITests

@@ -278,6 +278,7 @@ def _patch_pysdl2_ios_framework_lookup():
 _patch_pysdl2_ios_framework_lookup()
 
 import ui
+import pygame_ios
 
 _run_tid = [0]
 _run_lock = threading.RLock()
@@ -325,6 +326,19 @@ def check_runtime(_=""):
     probe = numpy.array([1, 2, 3])
     if int(probe.sum()) != 6:
         raise RuntimeError("NumPy failed its smoke test")
+    if sys.platform == "ios":
+        # Pygame imports NumPy-backed modules too. Keep those imports in this
+        # existing background preflight so the editor can render at startup.
+        pygame_ios.install()
+        import pygame
+        surface = pygame.Surface((2, 2))
+        surface.fill((12, 34, 56))
+        if tuple(surface.get_at((0, 0)))[:3] != (12, 34, 56):
+            raise RuntimeError("Pygame surface failed its smoke test")
+        # Verify required native modules without opening a game window or
+        # taking over SDL audio/video during the app's background preflight.
+        for name in ("display", "event", "imageext", "font", "mixer", "mixer_music"):
+            importlib.import_module("pygame." + name)
     return "Python ready · NumPy " + str(numpy.__version__)
 
 
@@ -488,9 +502,12 @@ def _worker(code, started):
     except BaseException as exc:
         _show_friendly_error(exc, exc.__traceback__)
     finally:
-        with _run_lock:
-            _run_tid[0] = 0
-            _running[0] = False
+        try:
+            pygame_ios.cleanup()
+        finally:
+            with _run_lock:
+                _run_tid[0] = 0
+                _running[0] = False
 
 
 def run_code(code):
@@ -568,10 +585,13 @@ def _callback_worker(d):
     except BaseException as exc:
         _show_friendly_error(exc, exc.__traceback__)
     finally:
-        with _run_lock:
-            _cb_tid[0] = 0
-            _callback_running[0] = False
-        ui._changed()
+        try:
+            pygame_ios.cleanup()
+        finally:
+            with _run_lock:
+                _cb_tid[0] = 0
+                _callback_running[0] = False
+            ui._changed()
 
 
 def send_event(arg):

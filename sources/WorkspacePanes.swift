@@ -123,6 +123,13 @@ struct ScriptsPane: View {
                 } header: { Text("Your scripts") }
                   footer: { Text("Saved automatically. Also available in Files → On My iPhone → PyPhone → Files.") }
                 Section { Button(action: openPackages) { Label("Python packages", systemImage: "shippingbox") } }
+                if let game = Starter.all.first(where: { $0.name == "pygame_game" }) {
+                    Section("Examples") {
+                        Button {
+                            if store.create(name: game.name, text: game.code) { openEditor() }
+                        } label: { Label(game.title, systemImage: game.symbol) }
+                    }
+                }
             }
             .listStyle(.insetGrouped).navigationTitle("Your workspace").navigationBarTitleDisplayMode(.inline)
             .searchable(text: $search, prompt: "Find a script").onAppear { store.refreshList() }
