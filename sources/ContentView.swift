@@ -18,7 +18,7 @@ struct PyFile: FileDocument {
     }
 }
 
-enum WorkspaceTab: Hashable { case code, console, files }
+enum WorkspaceTab: Hashable { case code, console, terminal, files }
 
 struct ContentView: View {
     @StateObject private var runner = Runner()
@@ -45,6 +45,8 @@ struct ContentView: View {
                 editor.tabItem { Label("Code", systemImage: "chevron.left.forwardslash.chevron.right") }.tag(WorkspaceTab.code)
                 ConsolePane(runner: runner, fontSize: CGFloat(fontSize), goToError: canShowError ? goToError : nil)
                     .tabItem { Label("Console", systemImage: "terminal") }.tag(WorkspaceTab.console)
+                ShellPane(runner: runner, fontSize: CGFloat(fontSize))
+                    .tabItem { Label("Terminal", systemImage: "chevron.left.forwardslash.chevron.right") }.tag(WorkspaceTab.terminal)
                 ScriptsPane(store: scripts, openEditor: { tab = .code }, importFile: { showImporter = true },
                             openPackages: { showPackages = true })
                     .tabItem { Label("Files", systemImage: "folder") }.tag(WorkspaceTab.files)
@@ -76,7 +78,7 @@ struct ContentView: View {
         .onChange(of: scenePhase) { phase in
             if phase == .active { scripts.reloadFromFiles() } else { scripts.save() }
         }
-        .onChange(of: runner.prompt) { prompt in if prompt != nil { tab = .console } }
+        .onChange(of: runner.prompt) { prompt in if prompt != nil { tab = runner.terminalActive ? .terminal : .console } }
         .onChange(of: scripts.name) { _ in lineRequest = 0; findRequest = 0; targetLine = 1 }
     }
 
@@ -130,11 +132,6 @@ struct ContentView: View {
                            lineRequest: lineRequest, targetLine: targetLine)
                     .id(scripts.name).frame(width: viewport.size.width, height: viewport.size.height)
             }
-            if runner.widgets.contains(where: { $0.kind != "image" }) {
-                Divider()
-                window
-                    .frame(minHeight: 140, maxHeight: 300)
-            }
             Divider()
             HStack {
                 Text("Python 3.13")
@@ -145,29 +142,6 @@ struct ContentView: View {
         .background(Color(.systemBackground)).clipShape(RoundedRectangle(cornerRadius: 16))
         .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.secondary.opacity(0.12)))
         .padding(.horizontal, 10).padding(.bottom, 6)
-    }
-
-    private var window: some View {
-        Group {
-            if runner.widgets.isEmpty {
-                VStack(spacing: 16) {
-                    Image(systemName: "rectangle.3.group").font(.system(size: 42)).foregroundStyle(.primary)
-                    Text("Your program's window").font(.title2.bold())
-                    Text("Interactive controls from ui appear here. Images show in the console.").foregroundStyle(.secondary).multilineTextAlignment(.center)
-                    Button("Try the window example") {
-                        if scripts.create(name: "my_window", text: Starter.code) { tab = .code }
-                    }.buttonStyle(.borderedProminent)
-                }.padding(28).frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text("PROGRAM WINDOW").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                        ForEach(runner.widgets.filter { $0.kind != "image" }) { WidgetView(w: $0, runner: runner) }
-                    }.frame(maxWidth: .infinity, alignment: .leading).padding(20)
-                }.background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 16))
-                    .padding(.horizontal, 10).padding(.bottom, 6)
-            }
-        }
     }
 
     private var canShowError: Bool {

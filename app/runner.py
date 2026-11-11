@@ -29,6 +29,9 @@ class _Out:
         self.lock = threading.Lock()
 
     def write(self, s):
+        if (self is _out and getattr(threading.current_thread(), "pyphone_terminal", False)
+                and not s.startswith("\x1fPYPHONE_IMAGE:")):
+            return _terminal_out.write(s)
         original_length = len(s)
         if not s:
             return 0
@@ -49,6 +52,7 @@ class _Out:
 
 
 _out = _Out()
+_terminal_out = _Out()
 sys.stdout = _out
 sys.stderr = _out
 
@@ -463,7 +467,9 @@ def _show_friendly_error(exc, tb=None):
     print(fix)
     print()
 
-def _worker(code, started):
+def _worker(code, started, terminal=False):
+    threading.current_thread().pyphone_terminal = terminal
+    previous_directory = os.getcwd()
     try:
         with _run_lock:
             _run_tid[0] = threading.get_ident()
@@ -479,7 +485,10 @@ def _worker(code, started):
         # Files may have been created/imported since the previous run, even
         # within the filesystem's directory timestamp resolution.
         importlib.invalidate_caches()
-        if not _pip_install_command(code):
+        if terminal:
+            import terminal_shell
+            terminal_shell.execute(code, _files_folder(), _pip_install_command)
+        elif not _pip_install_command(code):
             # Keep the source available for runtime tracebacks and callback errors.
             linecache.cache["<code>"] = (len(code), None, code.splitlines(keepends=True), "<code>")
             exec(compile(code, "<code>", "exec"), {"__name__": "__main__"})
@@ -488,12 +497,18 @@ def _worker(code, started):
     except BaseException as exc:
         _show_friendly_error(exc, exc.__traceback__)
     finally:
+        if terminal:
+            os.chdir(previous_directory)
         with _run_lock:
             _run_tid[0] = 0
             _running[0] = False
 
 
-def run_code(code):
+def run_terminal(command):
+    return run_code(command, terminal=True)
+
+
+def run_code(code, terminal=False):
     # Reserve the runner before starting the worker. Otherwise, two rapid Run
     # taps can both observe a zero thread ID before either worker starts.
     with _run_lock:
@@ -503,9 +518,10 @@ def run_code(code):
         _running[0] = True
         _error_line[0] = None
 
-    ui._reset()
+    if not terminal:
+        ui._reset()
     started = threading.Event()
-    worker = threading.Thread(target=_worker, args=(code, started), daemon=True)
+    worker = threading.Thread(target=_worker, args=(code, started, terminal), daemon=True)
     try:
         worker.start()
     except BaseException:
@@ -604,3 +620,12 @@ def take_output(_=""):
     return s
 
 
+
+
+def take_terminal_output(_=""):
+    with _terminal_out.lock:
+        text = ("[Older output trimmed]\n" if _terminal_out.trimmed else "") + "".join(_terminal_out.buf)
+        _terminal_out.buf.clear()
+        _terminal_out.size = 0
+        _terminal_out.trimmed = False
+    return text

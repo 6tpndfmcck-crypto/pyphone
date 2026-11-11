@@ -31,6 +31,8 @@ final class Runner: ObservableObject {
     @Published private(set) var inlineImages: [Widget] = []
     @Published private(set) var imageRevision = 0
     @Published var output = ""
+    @Published var terminalOutput = "PyPhone terminal. Type help for commands.\n"
+    @Published private(set) var terminalActive = false
     @Published var status = "Starting Python…"
     @Published var running = false
     @Published var prompt: String? = nil
@@ -117,7 +119,17 @@ final class Runner: ObservableObject {
         RunLoop.main.add(timer, forMode: .common)
     }
 
-    func run(_ code: String, name: String = "Script") {
+    func runTerminal(_ command: String) {
+        guard ready, !running else { return }
+        if command.trimmingCharacters(in: .whitespacesAndNewlines) == "clear" {
+            terminalOutput = ""
+            return
+        }
+        terminalOutput = ConsoleBuffer.appending("$ " + command + "\n", to: terminalOutput)
+        run(command, name: "Terminal", terminal: true)
+    }
+
+    func run(_ code: String, name: String = "Script", terminal: Bool = false) {
         // Keep the Run button from queueing duplicate programs before the first
         // state poll returns from Python.
         guard ready, !running else { return }
@@ -125,10 +137,13 @@ final class Runner: ObservableObject {
         let generation = runGeneration
         lastSeq = -1
         lastImageUpdate = -Double.infinity
-        output = ""
-        consoleImageIDs.removeAll()
-        inlineImages.removeAll()
-        imageRevision += 1
+        terminalActive = terminal
+        if !terminal {
+            output = ""
+            consoleImageIDs.removeAll()
+            inlineImages.removeAll()
+            imageRevision += 1
+        }
         prompt = nil
         errorLine = nil
         lastDuration = nil
@@ -142,7 +157,7 @@ final class Runner: ObservableObject {
         pythonQueue.async { [self] in
             fetchSequence = -1
             fetchedImages.removeAll()
-            let r = PythonBridge.call("run_code", arg: code)
+            let r = terminal ? PythonBridge.call("run_terminal", arg: code) : PythonBridge.call("run_code", arg: code)
             let (st, out) = fetch()
             DispatchQueue.main.async {
                 self.finish(st, extra: (r.hasPrefix("error:") ? r + "\n" : "") + out, fromEvent: true, generation: generation)
@@ -203,6 +218,7 @@ final class Runner: ObservableObject {
         guard let data = try? JSONSerialization.data(withJSONObject: payload),
               let json = String(data: data, encoding: .utf8) else { return }
         if kind == "tap" {
+            terminalActive = false
             running = true
             errorLine = nil
             lastDuration = nil
@@ -235,6 +251,13 @@ final class Runner: ObservableObject {
     private func fetch() -> (PyState?, String) {
         let s = PythonBridge.call("get_state", arg: String(fetchSequence))
         let o = PythonBridge.call("take_output", arg: "")
+        let terminalText = PythonBridge.call("take_terminal_output", arg: "")
+        if !terminalText.isEmpty {
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                self.terminalOutput = ConsoleBuffer.appending(terminalText, to: self.terminalOutput)
+            }
+        }
         guard let state = try? JSONDecoder().decode(PyState.self, from: Data(s.utf8)) else { return (nil, o) }
         fetchSequence = state.seq
         let images = state.widgets.filter { $0.kind == "image" }
@@ -331,7 +354,7 @@ final class Runner: ObservableObject {
                 imageRevision += 1
                 if !nextImages.isEmpty { lastImageUpdate = ProcessInfo.processInfo.systemUptime }
             }
-            // Image frames don't need to redraw the editor's interactive UI.
+            // Image frames don't need to redraw the console's interactive UI.
             let controls = st.widgets.filter { $0.kind != "image" }
             if widgets != controls { widgets = controls }
             lastSeq = st.seq
