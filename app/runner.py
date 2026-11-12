@@ -21,6 +21,14 @@ _PYPI_SSL_CONTEXT = (
 
 class _Out:
     MAX_PENDING = 200_000
+    encoding = "utf-8"
+    errors = "strict"
+    closed = False
+
+    def isatty(self):
+        # This is an ANSI-capable app console. Colorama otherwise strips SGR
+        # output because it assumes an unknown stream is closed/noninteractive.
+        return True
 
     def __init__(self):
         self.buf = deque()

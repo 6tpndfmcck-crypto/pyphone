@@ -119,9 +119,10 @@ final class TerminalTextView: UITextView {
         let previousSlots = imageSlots
         var slots: [Int: [ImageSlot]] = [:]
         var cursor = 0
+        var ansiState = ANSIConsoleRenderer.State()
         for match in Self.marker.matches(in: output, range: NSRange(location: 0, length: source.length)) {
             let before = NSRange(location: cursor, length: match.range.location - cursor)
-            result.append(ANSIConsoleRenderer.render(source.substring(with: before), fontSize: consoleFontSize))
+            result.append(ANSIConsoleRenderer.render(source.substring(with: before), fontSize: consoleFontSize, state: &ansiState))
             let identifier = Int(source.substring(with: match.range(at: 1))) ?? -1
             let occurrence = slots[identifier]?.count ?? 0
             let old = previousSlots[identifier] ?? []
@@ -134,7 +135,7 @@ final class TerminalTextView: UITextView {
             cursor = NSMaxRange(match.range)
         }
         let remainder = NSRange(location: cursor, length: source.length - cursor)
-        result.append(ANSIConsoleRenderer.render(source.substring(with: remainder), fontSize: consoleFontSize))
+        result.append(ANSIConsoleRenderer.render(source.substring(with: remainder), fontSize: consoleFontSize, state: &ansiState))
         imageSlots = slots
         attributedText = output.isEmpty
             ? ANSIConsoleRenderer.render("Console output appears here.", fontSize: consoleFontSize)
