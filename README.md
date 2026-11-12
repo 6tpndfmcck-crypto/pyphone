@@ -523,3 +523,24 @@ PyPhone runs Python inside an iOS app sandbox. Standard language features and co
 
 For release history, see [CHANGELOG.md](CHANGELOG.md). For native SDL2 details, see [SDL2-iOS.md](SDL2-iOS.md).
 
+
+### Console UI and Terminal
+
+Native `ui.label()`, `ui.button()`, and `ui.entry()` controls appear in the
+Console alongside program output. Images continue to appear inline in output.
+Buttons keep their Python callbacks and controls remain available after a run.
+
+The separate **Terminal** tab executes commands in the app's Files directory.
+Type `help` for supported commands: `pwd`, `cd`, `ls`, `cat`, `echo`, `mkdir`,
+`touch`, `cp`, `mv`, `rm`, `python`, and `pip install`. Quote paths with spaces.
+The working directory and command history persist while the app is open.
+Use the arrow buttons to recall commands and `clear` to clear terminal output.
+`python script.py` runs a file, `python -c "print(1 + 1)"` runs Python code,
+and `python` opens an interactive interpreter (`exit()` returns to the shell).
+Programs can request input; Stop interrupts the active command.
+
+This is an embedded iOS command shell, with its own output history. It supports
+built-in commands and the bundled Python runtime, not arbitrary OS executables,
+Bash, pipes, or shell redirection. Console runs and terminal commands share one
+interpreter and execute one at a time. Terminal commands preserve existing UI
+controls unless the command's Python code explicitly changes them.

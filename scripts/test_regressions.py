@@ -85,6 +85,51 @@ class Regressions(unittest.TestCase):
         runner.take_output()
         ui._reset()
 
+    def terminal(self, command):
+        runner.run_terminal(command)
+        wait_until(lambda: not runner._running[0])
+        return runner.take_terminal_output()
+
+    def test_terminal_files_cwd_and_ui_callbacks(self):
+        import terminal_shell
+        with local_scripts() as folder:
+            terminal_shell._directory = None
+            runner.take_terminal_output()
+            label = ui.label("before")
+            button = ui.button("Update", lambda: label.set("after"))
+            self.assertEqual(self.terminal("pwd"), str(folder) + "\n")
+            self.terminal('mkdir "two words"')
+            self.terminal('cd "two words"')
+            self.terminal('python -c "from pathlib import Path; Path(\'hello.txt\').write_text(\'hello\')"')
+            self.assertEqual(self.terminal("cat hello.txt"), "hello")
+            self.assertEqual(self.terminal("ls"), "hello.txt\n")
+            self.terminal("cp hello.txt copy.txt")
+            self.terminal("mv copy.txt moved.txt")
+            self.terminal("rm moved.txt")
+            self.assertEqual(self.terminal("pwd"), str(folder / "two words") + "\n")
+            self.assertEqual(runner.take_output(), "")
+            self.assertIn(button, ui._widgets)
+            runner.send_event(json.dumps({"id": button.id, "kind": "tap"}))
+            wait_until(lambda: not runner._callback_running[0])
+            self.assertEqual(label.get(), "after")
+            self.assertFalse((folder / "two words" / "moved.txt").exists())
+            terminal_shell._directory = None
+
+    def test_terminal_input_and_errors_have_separate_output(self):
+        import terminal_shell
+        terminal_shell._directory = None
+        runner.take_terminal_output()
+        runner.run_terminal('python -c "print(input(\'Name?\'))"')
+        wait_until(lambda: json.loads(runner.get_state())["prompt"] is not None)
+        state = json.loads(runner.get_state())
+        runner.input_reply(json.dumps({"prompt_id": state["prompt_id"], "text": "Ada"}))
+        wait_until(lambda: not runner._running[0])
+        self.assertIn("Ada", runner.take_terminal_output())
+        self.assertEqual(runner.take_output(), "")
+        self.assertIn("Unknown command", self.terminal("not-a-command"))
+        self.assertIn("FileNotFoundError", self.terminal("cat missing-file"))
+        self.assertEqual(self.terminal("echo still working"), "still working\n")
+
     @staticmethod
     def image_frame(data):
         class Frame:

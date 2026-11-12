@@ -29,7 +29,7 @@ struct ConsolePane: View {
                 .accessibilityLabel("Console actions")
             }.padding(.leading, 14).padding(.trailing, 4)
             Divider()
-            if runner.output.isEmpty && !runner.running {
+            if runner.output.isEmpty && runner.widgets.isEmpty && !runner.running {
                 VStack(spacing: 12) {
                     Image(systemName: "terminal").font(.system(size: 36)).foregroundStyle(.primary)
                     Text("Ready for your next idea").font(.headline)
@@ -42,6 +42,15 @@ struct ConsolePane: View {
                         .frame(width: viewport.size.width, height: viewport.size.height)
                 }
             }
+            if !runner.widgets.isEmpty {
+                Divider()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        ForEach(runner.widgets) { WidgetView(w: $0, runner: runner) }
+                    }.frame(maxWidth: .infinity, alignment: .leading).padding(14)
+                }.frame(minHeight: 140, maxHeight: 300)
+                    .accessibilityIdentifier("consoleWidgets")
+            }
             HStack {
                 if let action = goToError, let line = runner.errorLine {
                     Button("Go to line \(line)", action: action).foregroundStyle(.orange)
@@ -49,7 +58,7 @@ struct ConsolePane: View {
                 Spacer()
 
             }.font(.caption).padding(.horizontal, 14).padding(.vertical, 10)
-            if let prompt = runner.prompt { inputBar(prompt) }
+            if !runner.terminalActive, let prompt = runner.prompt { inputBar(prompt) }
         }
         .background(Color(.systemBackground)).clipShape(RoundedRectangle(cornerRadius: 16))
         .padding(.horizontal, 10).padding(.bottom, 6)
@@ -75,7 +84,10 @@ struct ConsolePane: View {
             }
         }.padding(14).background(Color.primary.opacity(0.09))
     }
-    private func prepareInput() { input = ""; inputFocused = true; followRequest += 1 }
+    private func prepareInput() {
+        guard !runner.terminalActive else { inputFocused = false; return }
+        input = ""; inputFocused = true; followRequest += 1
+    }
     private func submit() {
         guard runner.prompt != nil else { return }
         let answer = input
@@ -170,7 +182,7 @@ struct SettingsPane: View {
                 }
                 Section("PyPhone 2") {
                     LabeledContent("Version", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "2.0.0")
-                    Text("Made for coding on your iPhone. Scripts autosave, input stays in the console, and Python UI appears with your code.")
+                    Text("Made for coding on your iPhone. Scripts autosave, input stays in the console, and Python UI appears in the console.")
                         .font(.subheadline).foregroundStyle(.secondary)
                 }
             }.navigationTitle("Settings").navigationBarTitleDisplayMode(.inline)
@@ -212,5 +224,73 @@ struct PackagesPane: View {
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
                 .onAppear { runner.refreshPackages() }
         }
+    }
+}
+
+struct ShellPane: View {
+    @ObservedObject var runner: Runner
+    let fontSize: CGFloat
+    @State private var command = ""
+    @State private var history: [String] = []
+    @State private var historyIndex = 0
+    @State private var followRequest = 0
+
+    private var acceptingInput: Bool { runner.terminalActive && runner.prompt != nil }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text("Terminal").font(.headline)
+                Spacer()
+                Button("Clear") { runner.terminalOutput = "" }
+                if runner.running && runner.terminalActive {
+                    Button("Stop") { runner.stop() }
+                }
+            }.padding(14)
+            Divider()
+            GeometryReader { viewport in
+                TerminalView(output: runner.terminalOutput, fontSize: fontSize, followRequest: followRequest)
+                    .frame(width: viewport.size.width, height: viewport.size.height)
+            }
+            if acceptingInput {
+                Text(runner.prompt ?? "").font(.caption).frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal)
+            }
+            HStack {
+                Button { recall(-1) } label: { Image(systemName: "arrow.up") }
+                    .disabled(acceptingInput || historyIndex == 0).accessibilityLabel("Previous command")
+                Button { recall(1) } label: { Image(systemName: "arrow.down") }
+                    .disabled(acceptingInput || historyIndex >= history.count).accessibilityLabel("Next command")
+                TextField(acceptingInput ? "Program input…" : "Enter command…", text: $command)
+                    .font(.system(size: fontSize, design: .monospaced))
+                    .textInputAutocapitalization(.never).autocorrectionDisabled()
+                    .onSubmit(submit).submitLabel(.send)
+                    .accessibilityIdentifier("terminalCommand")
+                Button("Send", action: submit)
+                    .disabled(!runner.ready || (runner.running && !acceptingInput))
+            }.padding(14)
+        }
+        .background(Color(.systemBackground)).clipShape(RoundedRectangle(cornerRadius: 16))
+        .padding(.horizontal, 10).padding(.bottom, 6)
+    }
+
+    private func recall(_ delta: Int) {
+        historyIndex = min(history.count, max(0, historyIndex + delta))
+        command = historyIndex < history.count ? history[historyIndex] : ""
+    }
+
+    private func submit() {
+        guard runner.ready, !runner.running || acceptingInput else { return }
+        let text = command
+        if acceptingInput {
+            runner.submitInput(text)
+        } else {
+            guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+            history.append(text)
+            if history.count > 100 { history.removeFirst() }
+            historyIndex = history.count
+            runner.runTerminal(text)
+        }
+        command = ""
+        followRequest += 1
     }
 }

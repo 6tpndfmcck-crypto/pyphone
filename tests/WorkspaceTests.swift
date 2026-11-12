@@ -175,6 +175,36 @@ final class WorkspaceTests: XCTestCase {
     }
 
     @MainActor
+    func testConsoleShowsWidgetsWithoutPrintedOutput() async throws {
+        PythonBridge.setPromptState(#"{"widgets":[{"id":1,"kind":"entry","text":"","placeholder":"Console entry","image_data":null,"image_revision":0}],"running":false,"prompt":null,"prompt_id":0,"tid":0,"seq":1,"error_line":null}"#)
+        defer { PythonBridge.setPromptState(nil) }
+        let runner = Runner()
+        let host = UIHostingController(rootView: ConsolePane(runner: runner, fontSize: 15))
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 414, height: 896))
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        host.view.frame = window.bounds
+        // Wait for both the bridge poll and SwiftUI's next layout pass.
+        // A fixed delay can expire before Python startup on a loaded simulator.
+        let deadline = Date().addingTimeInterval(5)
+        while Date() < deadline {
+            host.view.layoutIfNeeded()
+            if let field = find(UITextField.self, in: host.view, matching: {
+                $0.placeholder == "Console entry"
+            }), field.bounds.height > 0 { break }
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
+        XCTAssertEqual(runner.widgets.first?.kind, "entry")
+        let entry = try XCTUnwrap(find(UITextField.self, in: host.view, matching: {
+            $0.placeholder == "Console entry"
+        }))
+        XCTAssertGreaterThan(entry.bounds.height, 0)
+        XCTAssertTrue(entry.isEnabled)
+        XCTAssertTrue(runner.output.isEmpty)
+    }
+
+    @MainActor
     func testConsoleShowsInlineInputAndColorOutput() async throws {
         PythonBridge.setPromptState(#"{"widgets":[],"running":true,"prompt":"What's your name?","prompt_id":1,"tid":1,"seq":0,"error_line":null}"#)
         defer { PythonBridge.setPromptState(nil) }
