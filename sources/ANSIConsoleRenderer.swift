@@ -1,17 +1,28 @@
 import UIKit
 
 enum ANSIConsoleRenderer {
-    // SGR colors from Colorama and Python error reporting. Unsupported CSI
-    // commands are consumed rather than displayed as escape-code clutter.
-    static func render(_ source: String, fontSize: CGFloat) -> NSAttributedString {
-        let result = NSMutableAttributedString(string: "")
-        let ns = source as NSString
-        let regex = try! NSRegularExpression(pattern: "\u{001B}\\[([0-9;]*)([@-~])")
+    struct State {
         var color = UIColor.label
         var background: UIColor?
         var bold = false
+    }
+
+    // SGR colors from Colorama and Python error reporting. Unsupported CSI
+    // commands are consumed rather than displayed as escape-code clutter.
+    static func render(_ source: String, fontSize: CGFloat) -> NSAttributedString {
+        var state = State()
+        return render(source, fontSize: fontSize, state: &state)
+    }
+
+    static func render(_ source: String, fontSize: CGFloat, state: inout State) -> NSAttributedString {
+        let result = NSMutableAttributedString(string: "")
+        let ns = source as NSString
+        let regex = try! NSRegularExpression(pattern: "\u{001B}\\[([0-9;]*)([@-~])")
+        var color = state.color
+        var background = state.background
+        var bold = state.bold
         var position = 0
-        let colors: [UIColor] = [.label, .systemRed, .systemGreen, .systemYellow, .systemBlue, .systemPurple, .systemTeal, .secondaryLabel]
+        let colors: [UIColor] = [.black, .systemRed, .systemGreen, .systemYellow, .systemBlue, .systemPurple, .systemTeal, .white]
         func append(_ range: NSRange) {
             guard range.length > 0 else { return }
             var attributes: [NSAttributedString.Key: Any] = [
@@ -49,6 +60,7 @@ enum ANSIConsoleRenderer {
         let partial = tail.range(of: "\u{001B}", options: .backwards)
         let count = partial.location == NSNotFound ? tail.length : partial.location
         append(NSRange(location: position, length: count))
+        state = State(color: color, background: background, bold: bold)
         return result
     }
 }

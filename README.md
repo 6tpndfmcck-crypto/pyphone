@@ -462,7 +462,7 @@ With Python 3.13, from the repository root:
 ```bash
 python3.13 -m venv .build-venv
 source .build-venv/bin/activate
-python -m pip install --only-binary=:all: "numpy==2.3.5" "helios-image==0.3.0" "pygame==2.6.1"
+python -m pip install --only-binary=:all: "numpy==2.3.5" "helios-image==0.3.0" "pygame==2.6.1" "colorama==0.4.6"
 python -m py_compile app/runner.py app/ui.py app/pygame_ios.py scripts/build_pygame_ios.py scripts/test_pygame.py scripts/test_contracts.py scripts/test_runtime.py scripts/test_regressions.py
 python scripts/test_contracts.py
 python scripts/test_runtime.py

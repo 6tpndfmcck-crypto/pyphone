@@ -202,7 +202,7 @@ jobs:
           export PYTHONPYCACHEPREFIX=/tmp/pyphone-pycache
           rm -rf "$PYTHONPYCACHEPREFIX"
           if [ "${{ steps.host-python.outputs.cache-hit }}" != "true" ]; then
-            "$BUILD_PYTHON" -m pip install --only-binary=:all: "numpy==2.3.5" "helios-image==0.3.0" "pygame==2.6.1"
+            "$BUILD_PYTHON" -m pip install --only-binary=:all: "numpy==2.3.5" "helios-image==0.3.0" "pygame==2.6.1" "colorama==0.4.6"
           else
             echo "Using cached host NumPy and HeliOS test environment"
           fi

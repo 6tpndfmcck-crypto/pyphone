@@ -119,6 +119,28 @@ final class WorkspaceTests: XCTestCase {
         XCTAssertEqual(ANSIConsoleRenderer.render("text\u{001B}[3", fontSize: 15).string, "text")
     }
 
+    func testConsoleExplicitBlackAndWhite() {
+        let result = ANSIConsoleRenderer.render("\u{001B}[30;47mX\u{001B}[39;49mY", fontSize: 15)
+        XCTAssertEqual(result.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? UIColor, .black)
+        XCTAssertEqual(result.attribute(.backgroundColor, at: 0, effectiveRange: nil) as? UIColor, .white)
+        XCTAssertEqual(result.attribute(.foregroundColor, at: 1, effectiveRange: nil) as? UIColor, .label)
+        XCTAssertNil(result.attribute(.backgroundColor, at: 1, effectiveRange: nil))
+    }
+
+    @MainActor
+    func testConsoleStylesContinueAcrossImageMarkers() {
+        let terminal = TerminalTextView(frame: CGRect(x: 0, y: 0, width: 320, height: 240), textContainer: nil)
+        terminal.setOutput("\u{001B}[1;31;44mA\u{001F}PYPHONE_IMAGE:7\u{001E}B\u{001B}[0mC", images: [], imageRevision: 0)
+        let result = terminal.attributedText!
+        XCTAssertEqual(result.string, "A\u{FFFC}BC")
+        XCTAssertEqual(result.attribute(.foregroundColor, at: 2, effectiveRange: nil) as? UIColor, .systemRed)
+        XCTAssertEqual(result.attribute(.backgroundColor, at: 2, effectiveRange: nil) as? UIColor, .systemBlue)
+        XCTAssertEqual(result.attribute(.font, at: 0, effectiveRange: nil) as? UIFont,
+                       result.attribute(.font, at: 2, effectiveRange: nil) as? UIFont)
+        XCTAssertEqual(result.attribute(.foregroundColor, at: 3, effectiveRange: nil) as? UIColor, .label)
+        XCTAssertNil(result.attribute(.backgroundColor, at: 3, effectiveRange: nil))
+    }
+
     func testConsoleLimitHandlesEmojiAndCombiningSequences() {
         let result = ConsoleBuffer.appending(String(repeating: "🙂", count: 200_000), to: "")
         XCTAssertLessThan(result.utf16.count, 200_000)

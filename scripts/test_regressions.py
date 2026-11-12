@@ -55,6 +55,31 @@ def local_scripts():
 
 
 class Regressions(unittest.TestCase):
+    def test_colorama_preserves_console_colors(self):
+        import colorama
+
+        # Exercise the same init paths scripts use, including the wrapper
+        # installed by autoreset. Restore process streams after each case.
+        for options in ({}, {"autoreset": True}, {"strip": True}):
+            with self.subTest(options=options):
+                runner.take_output()
+                with mock.patch.object(sys, "stdout", runner._out), \
+                        mock.patch.object(sys, "stderr", runner._out):
+                    try:
+                        colorama.init(**options)
+                        print(colorama.Fore.RED + "red", end="")
+                        print(colorama.Back.BLUE + "blue", end="", file=sys.stderr)
+                    finally:
+                        colorama.deinit()
+                output = runner.take_output()
+                if options.get("strip"):
+                    self.assertEqual(output, "redblue")
+                else:
+                    self.assertIn("\x1b[31mred", output)
+                    self.assertIn("\x1b[44mblue", output)
+                    if options.get("autoreset"):
+                        self.assertIn(colorama.Style.RESET_ALL, output)
+
     def setUp(self):
         wait_until(lambda: not runner._running[0] and not runner._cb_tid[0])
         runner.take_output()

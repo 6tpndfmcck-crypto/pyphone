@@ -1,5 +1,10 @@
 # Unreleased
 
+Fix Colorama initialization stripping Console colors by exposing the output
+stream as open and ANSI-capable. Preserve ANSI styling across inline images
+and render explicit black/white colors independently of the app theme. Add
+Colorama runtime and Console rendering regressions.
+
 Bundle native Pygame 2.6.1 against the existing SDL2 framework, including fonts,
 image loading/saving and mixer audio. Route video/input through the UIKit main
 thread, attach SDL's window to the SwiftUI scene, scale software game surfaces,
