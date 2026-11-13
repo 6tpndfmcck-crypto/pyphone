@@ -75,9 +75,9 @@ require("- sources" in project and "path: app" in project and "path: app_package
 require("Python.xcframework" in project and "scripts/install_python.sh" in project,
         "XcodeGen project must link Python.xcframework and run the Python installer")
 require("Python.xcframework" in workflow and "requirements.txt" in workflow and
-        "python-stdlib/python3.13" in workflow and "app_packages" in workflow,
+        "python-stdlib/python3.15" in workflow and "app_packages" in workflow,
         "GitHub Actions staging does not provide all runtime resources")
-require("--python-version 3.13" in workflow and "--abi cp313" in workflow and
+require("--python-version 3.15" in workflow and "--abi cp315" in workflow and
         "--platform ios_13_0_arm64_iphoneos" in workflow,
         "GitHub Actions NumPy wheel target does not match the Python/iOS runtime")
 require("scripts/test_contracts.py" in workflow and "scripts/test_runtime.py" in workflow,

@@ -1,6 +1,6 @@
 # PyPhone
 
-A native Python workspace for iPhone. Write, run, and organize Python scripts on iOS with **CPython 3.13**, **NumPy**, **Pygame**, an autosaving editor, and a Console that supports text, input, and animated images.
+A native Python workspace for iPhone. Write, run, and organize Python scripts on iOS with **CPython 3.15**, **NumPy**, **Pygame**, an autosaving editor, and a Console that supports text, input, and animated images.
 
 **Requires iOS 16 or later.** The project builds an unsigned IPA for installation through your own signing or app-container setup. Editing and running local scripts work offline once the app and any required packages are installed.
 
@@ -317,7 +317,7 @@ Console clearing, a new Run, or text trimming can remove an image's position. Af
 
 ### Included runtime
 
-PyPhone embeds CPython 3.13 and an iOS-compatible standard library. The build pins these bundled packages in [requirements.txt](requirements.txt):
+PyPhone embeds CPython 3.15 and an iOS-compatible standard library. The build pins these bundled packages in [requirements.txt](requirements.txt):
 
 | Distribution | Pinned version | Purpose |
 | --- | --- | --- |
@@ -457,12 +457,15 @@ For a reproducible problem, include the app/build version, iOS version, a small 
 
 ### Host Python checks
 
-With Python 3.13, from the repository root:
+Host tests use pygame-ce 2.5.8, which provides Python 3.15 wheels and the
+`pygame` import API. The iOS build compiles its pinned Pygame source separately.
+
+With Python 3.15, from the repository root:
 
 ```bash
-python3.13 -m venv .build-venv
+python3.15 -m venv .build-venv
 source .build-venv/bin/activate
-python -m pip install --only-binary=:all: "numpy==2.3.5" "helios-image==0.3.0" "pygame==2.6.1" "colorama==0.4.6"
+python -m pip install --only-binary=:all: "numpy==2.5.4" "helios-image==0.3.0" "pygame-ce==2.5.8" "colorama==0.4.6"
 python -m py_compile app/runner.py app/ui.py app/pygame_ios.py scripts/build_pygame_ios.py scripts/test_pygame.py scripts/test_contracts.py scripts/test_runtime.py scripts/test_regressions.py
 python scripts/test_contracts.py
 python scripts/test_runtime.py
@@ -492,7 +495,7 @@ The **PyPhone source checks** workflow runs host and simulator validation and up
 
 The [PyPhone iOS Build workflow](.github/workflows/build.yml) is the complete reference for staging and building the app. It runs on pushes to `main` and can also be started manually from Actions.
 
-A local device build needs more than `xcodegen generate`: stage the BeeWare **Python 3.13-b16** framework and standard library, prepare the iOS-target `app_packages`, build `SDL2.xcframework`, run `python3 scripts/build_pygame_ios.py` to build Pygame and `PygameDependencies.xcframework`, and generate the app icon assets first. The workflow records the exact download targets and preparation commands. See [scripts/install_python.sh](scripts/install_python.sh) for the post-build runtime installation and [SDL2-iOS.md](SDL2-iOS.md) for SDL2/Pygame preparation.
+A local device build needs more than `xcodegen generate`: stage the BeeWare **Python 3.15-b3** framework and standard library, prepare the iOS-target `app_packages`, build `SDL2.xcframework`, run `python3 scripts/build_pygame_ios.py` to build Pygame and `PygameDependencies.xcframework`, and generate the app icon assets first. The workflow records the exact download targets and preparation commands. See [scripts/install_python.sh](scripts/install_python.sh) for the post-build runtime installation and [SDL2-iOS.md](SDL2-iOS.md) for SDL2/Pygame preparation.
 
 The build creates an unsigned IPA and checks the packaged Python resources, NumPy, SDL2, Pygame modules/fonts/dependencies, native framework layout, IPA structure, ZIP integrity, and checksums. Signing and installation are separate from these checks.
 

@@ -4,7 +4,7 @@
 set -e
 APP="$CODESIGNING_FOLDER_PATH"
 XC="$PROJECT_DIR/Python.xcframework"
-STDLIB="$PROJECT_DIR/python-stdlib/python3.13"
+STDLIB="$PROJECT_DIR/python-stdlib/python3.15"
 
 if [ "$EFFECTIVE_PLATFORM_NAME" = "-iphonesimulator" ]; then
   SLICE="ios-arm64_x86_64-simulator"
@@ -24,10 +24,10 @@ fi
 # BeeWare's XCFramework stores Python files in the architecture-specific
 # lib-arm64/lib-x86_64 folder. Older package layouts may put them directly
 # under lib/, so use that only when it contains the expected Python tree.
-if [ ! -d "$LIBROOT/python3.13/lib-dynload" ] && [ -d "$XC/$SLICE/lib/python3.13/lib-dynload" ]; then
+if [ ! -d "$LIBROOT/python3.15/lib-dynload" ] && [ -d "$XC/$SLICE/lib/python3.15/lib-dynload" ]; then
   LIBROOT="$XC/$SLICE/lib"
 fi
-if [ ! -d "$LIBROOT/python3.13/lib-dynload" ]; then
+if [ ! -d "$LIBROOT/python3.15/lib-dynload" ]; then
   echo "error: Python native modules directory not found under $LIBROOT" >&2
   ls -R "$XC/$SLICE" | head -80 >&2
   exit 1
@@ -38,18 +38,18 @@ if [ ! -f "$STDLIB/encodings/__init__.py" ]; then
 fi
 
 mkdir -p "$APP/python/lib"
-# This directory contains libpython3.13.dylib.
+# This directory contains libpython3.15.dylib.
 rsync -au --delete "$LIBROOT/" "$APP/python/lib/"
 # The support archive's standard library is separate from the XCFramework's
-# lib/ directory, so copy it into the expected python/lib/python3.13 location.
-mkdir -p "$APP/python/lib/python3.13"
+# lib/ directory, so copy it into the expected python/lib/python3.15 location.
+mkdir -p "$APP/python/lib/python3.15"
 # Merge the pure-Python standard library into the XCFramework's Python
 # library tree. Do NOT use --delete here: the XCFramework may be the source
 # of lib-dynload native modules, and deleting files absent from STDLIB would
 # remove modules such as math before they can be bundled as iOS frameworks.
-rsync -au "$STDLIB/" "$APP/python/lib/python3.13/"
+rsync -au "$STDLIB/" "$APP/python/lib/python3.15/"
 
-DYNLOAD="$APP/python/lib/python3.13/lib-dynload"
+DYNLOAD="$APP/python/lib/python3.15/lib-dynload"
 if [ ! -d "$DYNLOAD" ]; then
   echo "error: Python native extension directory is missing: $DYNLOAD" >&2
   echo "Looking for lib-dynload in the support archive and XCFramework:" >&2
@@ -62,7 +62,7 @@ if ! find "$DYNLOAD" -maxdepth 1 -type f -name 'math*.so' -print -quit | grep -q
   exit 1
 fi
 
-PYVER="python3.13"
+PYVER="python3.15"
 test -d "$APP/python/lib/$PYVER" || { echo "error: $PYVER was not installed under $APP/python/lib" >&2; find "$APP/python/lib" -maxdepth 3 -type d -print | head -50 >&2; exit 1; }
 echo "Python lib folder: $PYVER"
 

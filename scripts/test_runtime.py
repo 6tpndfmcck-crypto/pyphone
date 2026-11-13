@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Host-side smoke tests for PyPhone's Python runner and UI bridge.
 
-Run with the build Mac's Python 3.13 before compiling the iOS app. The
+Run with the build Mac's Python 3.15 before compiling the iOS app. The
 iOS-only NumPy binary is checked separately during packaging and at app startup.
 """
 import datetime
