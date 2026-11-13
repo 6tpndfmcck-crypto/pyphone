@@ -52,7 +52,7 @@ static NSString *exceptionText(void) {
     NSString *app = [res stringByAppendingPathComponent:@"app"];
     // Xcode copies the app/ folder reference with its original lowercase name.
 
-    // Find the standard library folder, e.g. python/lib/python3.13
+    // Find the standard library folder, e.g. python/lib/python3.15
     NSString *libDir = [home stringByAppendingPathComponent:@"lib"];
     NSArray<NSString *> *libItems = [fm contentsOfDirectoryAtPath:libDir error:nil];
     NSString *ver = nil;

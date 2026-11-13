@@ -134,7 +134,7 @@ struct ContentView: View {
             }
             Divider()
             HStack {
-                Text("Python 3.13")
+                Text("Python 3.15")
                 Spacer()
                 Text("\(scripts.code.reduce(1) { $1 == "\n" ? $0 + 1 : $0 }) lines")
             }.font(.caption2.monospaced()).foregroundStyle(.secondary).padding(.horizontal, 14).padding(.vertical, 7)

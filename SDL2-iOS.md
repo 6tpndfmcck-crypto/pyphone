@@ -12,7 +12,7 @@ bash scripts/build_sdl2_xcframework.sh
 
 The script checks out the pinned official SDL2 source release (`release-2.32.10`), builds its `xcFramework-iOS` scheme for iOS device and simulator, and copies `SDL2.xcframework` to the repository root. To use another SDL2 source tag, set `SDL2_TAG` when running the script.
 
-After staging the BeeWare Python 3.13-b16 framework and the iOS packages as in
+After staging the BeeWare Python 3.15-b3 framework and the iOS packages as in
 `.github/workflows/build.yml`, build Pygame with Xcode and CMake installed:
 
 ```sh

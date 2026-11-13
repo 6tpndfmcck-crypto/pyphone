@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Cross-compile Pygame for BeeWare CPython 3.13 and PyPhone's SDL2.
+"""Cross-compile Pygame for BeeWare CPython 3.15 and PyPhone's SDL2.
 
 Run on macOS after staging Python.xcframework and SDL2.xcframework. No host
 Pygame wheel, host Python headers, or implicit desktop library lookup is used.
@@ -75,6 +75,42 @@ def prepare_source(source):
         if count != 1:
             raise RuntimeError("Upstream PNG writer changed")
         path.write_text(text)
+    # Python 3.15 removed the borrowed-reference PyWeakref_GetObject API.
+    # Hold each referent alive until its last use, including unlock callbacks.
+    replacements = {
+        "surface.c": [
+            ("tmp = PyWeakref_GetObject(PyList_GetItem(surf->locklist, i));\n        Py_INCREF(tmp);",
+             "int alive = PyWeakref_GetRef(PyList_GetItem(surf->locklist, i), &tmp);\n"
+             "        if (alive < 0) { Py_DECREF(tuple); return NULL; }\n"
+             "        if (!alive) tmp = Py_NewRef(Py_None);"),
+            ("consumer = PyWeakref_GetObject(consumer_ref);",
+             "int alive = PyWeakref_GetRef(consumer_ref, &consumer);\n"
+             "    if (alive < 0) PyErr_Clear();"),
+            ("    Py_DECREF(consumer_ref);\n    PyMem_Free(internal);",
+             "    Py_XDECREF(consumer);\n    Py_DECREF(consumer_ref);\n    PyMem_Free(internal);"),
+        ],
+        "surflock.c": [
+            ("ref = PyWeakref_GetObject(item);\n            if (ref == lockobj)",
+             "int alive = PyWeakref_GetRef(item, &ref);\n"
+             "            if (alive < 0) return 0;\n"
+             "            int matches = (ref == lockobj);\n"
+             "            Py_XDECREF(ref);\n            if (matches)"),
+            ("ref = PyWeakref_GetObject(item);\n            if (ref == Py_None)",
+             "int alive = PyWeakref_GetRef(item, &ref);\n"
+             "            if (alive < 0) return 0;\n"
+             "            Py_XDECREF(ref);\n            if (!alive)"),
+        ],
+    }
+    for filename, changes in replacements.items():
+        path = source / "src_c" / filename
+        text = path.read_text()
+        if "/* PyPhone: Python 3.15 weakrefs */" in text:
+            continue
+        for old, new in changes:
+            if text.count(old) != 1:
+                raise RuntimeError(f"Upstream weakref code changed in {filename}")
+            text = text.replace(old, new)
+        path.write_text("/* PyPhone: Python 3.15 weakrefs */\n" + text)
     version = (source / "buildconfig/version.py.in").read_text()
     (source / "src_py/version.py").write_text(version + (
         f'\nver = "{VERSION}"\nvernum = PygameVersion(2, 6, 1)\nrev = "pyphone-ios"\n'
