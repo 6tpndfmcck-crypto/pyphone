@@ -78,6 +78,14 @@ jobs:
           path: .build/pygame/source
           key: pyphone-pygame-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/build_pygame_ios.py', 'scripts/pygame/CMakeLists.txt', 'scripts/build_sdl2_xcframework.sh', '.github/workflows/build.yml') }}
 
+      # Host tools are separate from the BeeWare iOS runtime staged below.
+      - name: Set up host Python
+        id: setup-host-python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.15.2"
+          architecture: x64
+
       - name: Install build tools
         id: toolchain
         shell: bash
@@ -89,11 +97,6 @@ jobs:
             echo "Using preinstalled xcodegen"
           fi
           if ! command -v cmake >/dev/null 2>&1; then brew install cmake; fi
-          if ! command -v python3.15 >/dev/null 2>&1; then
-            brew install python@3.15
-          else
-            echo "Using available Python 3.15: $(command -v python3.15)"
-          fi
           # Native module caches and venvs must not cross SDK, runner-image,
           # Python installation, or architecture changes.
           TOOLCHAIN_KEY="$(
@@ -101,7 +104,7 @@ jobs:
               xcodebuild -version
               xcrun --sdk iphoneos --show-sdk-version
               xcrun --sdk iphoneos --show-sdk-build-version
-              python3.15 -c 'import os, sys; print(sys.version); print(sys.executable); print(os.path.realpath(sys.executable))'
+              "${{ steps.setup-host-python.outputs.python-path }}" -c 'import os, sys; print(sys.version); print(sys.executable); print(os.path.realpath(sys.executable))'
               printf '%s\n' "${ImageOS:-unknown}" "${ImageVersion:-unknown}"
             } | shasum -a 256 | cut -d ' ' -f 1
           )"
@@ -112,7 +115,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .build-venv
-          key: pyphone-host-venv-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.cache-key }}-${{ hashFiles('requirements.txt', '.github/workflows/build.yml') }}
+          key: pyphone-host-venv-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.cache-key }}-${{ hashFiles('requirements.txt', '.github/workflows/build.yml') }}
 
       - name: Cache compiler modules
         uses: actions/cache@v4
@@ -131,7 +134,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          PYTHON_BIN="$(command -v python3.15)"
+          PYTHON_BIN="${{ steps.setup-host-python.outputs.python-path }}"
           "$PYTHON_BIN" --version
           if [ "${{ steps.python-runtime.outputs.cache-hit }}" != "true" ]; then
             rm -rf py Python.xcframework python-stdlib
@@ -232,7 +235,7 @@ jobs:
           set -euo pipefail
           test -s icon.png
           mkdir -p sources/Assets.xcassets/AppIcon.appiconset
-          python3 - <<'PY'
+          .build-venv/bin/python - <<'PY'
           import json, subprocess
           from pathlib import Path
 
@@ -351,7 +354,7 @@ jobs:
           mkdir Payload
           cp -R "$APP_PATH" Payload/
           zip -qry PyPhone.ipa Payload
-          python3 - <<'PY'
+          .build-venv/bin/python - <<'PY'
           import hashlib, zipfile
           from pathlib import Path
           ipa = Path("PyPhone.ipa")
