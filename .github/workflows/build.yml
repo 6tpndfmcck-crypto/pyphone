@@ -325,7 +325,10 @@ jobs:
             xcrun otool -L "$APP_PATH/Frameworks/pygame.$module.framework/pygame.$module" | grep -F '@rpath/SDL2.framework/SDL2'
           done
 
-          for module in math _datetime; do
+          # BeeWare 3.15 builds _datetime into Python rather than a separate
+          # extension framework. Verify its initializer in the shipped binary.
+          xcrun nm -g "$APP_PATH/Frameworks/Python.framework/Python" | grep -E '[[:space:]]T[[:space:]]+_PyInit__datetime$'
+          for module in math; do
             test -f "$APP_PATH/Frameworks/$module.framework/$module" || {
               echo "Python native framework is missing: $module"
               find "$APP_PATH/Frameworks" -maxdepth 1 \( -iname '*math*' -o -iname '*datetime*' \) -print
