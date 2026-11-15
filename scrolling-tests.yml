@@ -21,6 +21,8 @@ targets:
       - sources/ContentView.swift
       - sources/WorkspacePanes.swift
       - sources/Runner.swift
+      - sources/CodingAgent.swift
+      - tests/AgentTests.swift
       - tests/ScrollingTests.swift
       - tests/WorkspaceTests.swift
       - tests/RunnerImageTests.swift

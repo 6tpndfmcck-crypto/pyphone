@@ -547,3 +547,47 @@ built-in commands and the bundled Python runtime, not arbitrary OS executables,
 Bash, pipes, or shell redirection. Console runs and terminal commands share one
 interpreter and execute one at a time. Terminal commands preserve existing UI
 controls unless the command's Python code explicitly changes them.
+
+## Coding Agent (initial integration)
+
+Select a script in Files, then open Agent. Choose OpenRouter and enter an explicit
+currently available model ID ending in `:free` from OpenRouter's model catalog.
+No model is automatically selected: free model availability changes. Enter your
+API key and tap **Save key securely**, then **Test connection and JSON capability**.
+Keys are stored in the device-only iOS Keychain, never UserDefaults. OpenAI is
+optional and requires explicitly enabling paid API usage; there is no assumed
+free OpenAI API tier. There is no automatic model fallback or billing subscription.
+Provider errors stop the task, including rate limits; retry manually later.
+
+Ask and Tips are read-only, on demand. Agent can inspect, search, replace, and run
+the selected script. Send authorizes transmitting script contents to the provider.
+Each edit shows complete before/after text for approval, then saves a persistent
+snapshot in Application Support. Undo latest change restores the most recent
+snapshot for that script (and snapshots the current version). Stop Agent cancels
+network requests and pending approvals and requests a runtime interrupt.
+The loop permits 20 actions and at most five failed executions. Unexpected JSON
+stops the task rather than executing loosely interpreted instructions.
+
+### Scope and limitations
+
+This is an initial single-script integration, not the full multi-file autonomous
+project agent. File creation/deletion and package installation tools are not yet
+provided. Existing manual file/package workflows remain available. The agent has
+no model-supplied path arguments and rejects symlinked selected scripts. Source
+and output are explicitly treated as untrusted data in the model protocol.
+Read-only tools do not provide a Python security sandbox: approved Python has
+normal access to app files, packages, and networking. Review execution approvals
+carefully. Runtime side effects are **not** covered by source undo. Native extension
+calls can delay interruption indefinitely; the 30-second deadline requests Stop,
+it does not guarantee termination. Pygame uses the unchanged graphical runner;
+view its results in Console, and do not infer graphical correctness from launch.
+Switching away from Agent cancels the task. A task stops if script selection changes.
+
+The protocol connection test verifies a JSON report response, not every future
+model action. Full device validation, mocked HTTP/cancellation tests, multi-file
+rollback, unified line diffs, and robust unattended test-result classification
+remain outstanding. Execution results report output and error-line evidence;
+model summaries are not independent proof of passing tests or correct behavior.
+There is no automatic retry for transport errors. Backups persist but currently
+have no retention cleanup UI. iOS builds require the repository's macOS/Xcode
+workflow; the Linux implementation environment cannot compile SwiftUI/Security.
