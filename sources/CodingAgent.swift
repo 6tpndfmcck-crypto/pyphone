@@ -20,17 +20,30 @@ enum AgentKeychain {
               let data = result as? Data else { return "" }
         return String(data: data, encoding: .utf8) ?? ""
     }
-    static func save(_ key: String, provider: String) throws {
+    static func save(_ key: String, provider: String,
+                     update: (CFDictionary, CFDictionary) -> OSStatus = { SecItemUpdate($0, $1) },
+                     add: (CFDictionary) -> OSStatus = { SecItemAdd($0, nil) }) throws {
+        let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            throw AgentFailure(message: "Enter an API key. Your saved key has not been changed.")
+        }
         let q = query(provider)
-        SecItemDelete(q as CFDictionary)
-        if key.isEmpty { return }
-        var entry = q
-        entry[kSecValueData as String] = Data(key.utf8)
-        entry[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
-        guard SecItemAdd(entry as CFDictionary, nil) == errSecSuccess else {
+        let attributes: [String: Any] = [
+            kSecValueData as String: Data(trimmed.utf8),
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+        ]
+        // Update in place: a failed replacement must not delete the working key.
+        let status = update(q as CFDictionary, attributes as CFDictionary)
+        if status == errSecSuccess { return }
+        guard status == errSecItemNotFound else {
+            throw AgentFailure(message: "Keychain update failed. Your saved key has not been deleted.")
+        }
+        let entry = q.merging(attributes) { _, new in new }
+        guard add(entry as CFDictionary) == errSecSuccess else {
             throw AgentFailure(message: "Keychain save failed")
         }
     }
+
 }
 
 struct AgentProvider {
@@ -294,6 +307,7 @@ struct AgentAction {
                     TextField("Exact model ID (use :free)", text: $model).textInputAutocapitalization(.never).autocorrectionDisabled()
                     SecureField("API key", text: $key)
                     Button("Save key securely") { do { try AgentKeychain.save(key, provider: provider); key = "" } catch { agent.log = error.localizedDescription } }
+                        .disabled(key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     Toggle("Allow paid API usage", isOn: $paid)
                     Button("Test connection and JSON capability") { agent.start(instruction: "", mode: "Ask", config: config, store: store, runner: runner, test: true) }
                 }.disabled(agent.busy)
