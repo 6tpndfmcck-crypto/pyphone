@@ -565,8 +565,10 @@ Each edit shows complete before/after text for approval, then saves a persistent
 snapshot in Application Support. Undo latest change restores the most recent
 snapshot for that script (and snapshots the current version). Stop Agent cancels
 network requests and pending approvals and requests a runtime interrupt.
-The loop permits 20 actions and at most five failed executions. Unexpected JSON
-stops the task rather than executing loosely interpreted instructions.
+The loop permits 20 actions and at most five failed executions. Invalid JSON actions receive at most three protocol correction requests per task;
+no tool executes until the corrected action passes strict validation. A single
+JSON Markdown fence is accepted, but surrounding prose or multiple actions are not.
+Diagnostics identify schema failures without echoing rejected content or unknown keys.
 
 ### Scope and limitations
 
@@ -584,7 +586,7 @@ view its results in Console, and do not infer graphical correctness from launch.
 Switching away from Agent cancels the task. A task stops if script selection changes.
 
 The protocol connection test verifies a JSON report response, not every future
-model action. Full device validation, mocked HTTP/cancellation tests, multi-file
+model action. Full device validation, mocked HTTP tests, multi-file
 rollback, unified line diffs, and robust unattended test-result classification
 remain outstanding. Execution results report output and error-line evidence;
 model summaries are not independent proof of passing tests or correct behavior.
