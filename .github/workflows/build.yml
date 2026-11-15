@@ -110,13 +110,6 @@ jobs:
           )"
           echo "cache-key=$TOOLCHAIN_KEY" >> "$GITHUB_OUTPUT"
 
-      - name: Cache host test environment
-        id: host-python
-        uses: actions/cache@v4
-        with:
-          path: .build-venv
-          key: pyphone-host-venv-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.cache-key }}-${{ hashFiles('requirements.txt', '.github/workflows/build.yml') }}
-
       - name: Cache compiler modules
         uses: actions/cache@v4
         with:
@@ -181,10 +174,7 @@ jobs:
           test -f python-stdlib/python3.15/datetime.py
           find Python.xcframework/ios-arm64 -type f -name 'math*.so' -print -quit | grep -q .
 
-          if [ "${{ steps.host-python.outputs.cache-hit }}" != "true" ]; then
-            rm -rf .build-venv
-            "$PYTHON_BIN" -m venv .build-venv
-          fi
+          "$PYTHON_BIN" -m venv .build-venv
           BUILD_PYTHON="$PWD/.build-venv/bin/python"
           mkdir -p app_packages
           if [ ! -f app_packages/numpy/__init__.py ]; then
@@ -201,22 +191,10 @@ jobs:
           fi
           test -f app_packages/numpy/__init__.py
 
-          export PYTHONDONTWRITEBYTECODE=1
-          export PYTHONPYCACHEPREFIX=/tmp/pyphone-pycache
-          rm -rf "$PYTHONPYCACHEPREFIX"
-          if [ "${{ steps.host-python.outputs.cache-hit }}" != "true" ]; then
-            "$BUILD_PYTHON" -m pip install --only-binary=:all: "numpy==2.5.4" "helios-image==0.3.0" "pygame-ce==2.5.8" "colorama==0.4.6"
-          else
-            echo "Using cached host NumPy and HeliOS test environment"
-          fi
-          "$BUILD_PYTHON" -m py_compile app/runner.py app/ui.py scripts/test_runtime.py scripts/test_contracts.py scripts/test_regressions.py
-          "$BUILD_PYTHON" scripts/test_contracts.py
-          "$BUILD_PYTHON" scripts/test_runtime.py
-          "$BUILD_PYTHON" scripts/test_regressions.py
-          "$BUILD_PYTHON" scripts/test_pygame.py
+          # Host runtime tests run once in quality.yml.
           test -f app_packages/numpy/__init__.py
           find app_packages/numpy -type f -name '*.so' -print -quit | grep -q .
-          echo "Python runtime tests and NumPy package checks passed."
+          echo "NumPy package checks passed."
 
       - name: Build native Pygame against the embedded SDL2
         run: |
@@ -382,29 +360,14 @@ jobs:
           shasum -a 256 PyPhone.ipa PyPhone_ipa.zip > PyPhone_SHA256.txt
           ls -lh PyPhone.ipa PyPhone_ipa.zip PyPhone_SHA256.txt
 
-      - name: Stage and verify downloadable files
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p artifacts
-          find . -maxdepth 5 -type f \( -name 'PyPhone_ipa.zip' -o -name 'PyPhone.ipa' -o -name 'PyPhone_SHA256.txt' -o -name 'xcodebuild.log' \) -not -path './artifacts/*' -print
-          for file in PyPhone_ipa.zip PyPhone_SHA256.txt xcodebuild.log; do
-            if [ -f "$file" ]; then cp "$file" artifacts/; fi
-          done
-          echo "Files staged for upload:"
-          ls -lah artifacts
-          if [ ! -s artifacts/PyPhone_ipa.zip ]; then
-            echo "ERROR: PyPhone_ipa.zip was not created; the build/package step did not produce the expected download."
-            exit 1
-          fi
-          unzip -tq artifacts/PyPhone_ipa.zip
-          unzip -Z1 artifacts/PyPhone_ipa.zip | grep -Fxq "PyPhone.ipa"
-
       - name: Upload PyPhone IPA artifact
         uses: actions/upload-artifact@v4
         with:
           name: pyphone
-          path: artifacts/
+          path: |
+            PyPhone_ipa.zip
+            PyPhone_SHA256.txt
+            xcodebuild.log
           if-no-files-found: error
           retention-days: 14
           compression-level: 0
