@@ -18,11 +18,12 @@ struct PyFile: FileDocument {
     }
 }
 
-enum WorkspaceTab: Hashable { case code, console, terminal, files, agent }
+enum WorkspaceTab: Hashable { case code, console, terminal, files, agent, aster }
 
 struct ContentView: View {
     @StateObject private var runner = Runner()
     @StateObject private var scripts = ScriptStore()
+    @StateObject private var aster = AsterSession()
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("v2.appearance") private var appearance = "dark"
     @AppStorage("v2.fontSize") private var fontSize = 15.0
@@ -44,6 +45,8 @@ struct ContentView: View {
             TabView(selection: $tab) {
                 AgentPane(store: scripts, runner: runner)
                     .tabItem { Label("Agent", systemImage: "sparkles") }.tag(WorkspaceTab.agent)
+                AsterPane(session: aster)
+                    .tabItem { Label("Aster", systemImage: "brain.head.profile") }.tag(WorkspaceTab.aster)
                 editor.tabItem { Label("Code", systemImage: "chevron.left.forwardslash.chevron.right") }.tag(WorkspaceTab.code)
                 ConsolePane(runner: runner, fontSize: CGFloat(fontSize), goToError: canShowError ? goToError : nil)
                     .tabItem { Label("Console", systemImage: "terminal") }.tag(WorkspaceTab.console)

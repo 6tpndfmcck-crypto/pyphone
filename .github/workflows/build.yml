@@ -207,6 +207,22 @@ jobs:
             xcrun otool -L "app_packages/pygame/$module.so"
           done
 
+      - name: Download pinned llama.cpp iOS framework for Aster
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Release b5046 matches the API in sources/Aster.swift. Do not download
+          # or bundle a GGUF model; the user selects their model in Files.
+          curl --fail --location --retry 3 \
+            https://github.com/ggml-org/llama.cpp/releases/download/b5046/llama-b5046-xcframework.zip \
+            --output "$RUNNER_TEMP/llama-xcframework.zip"
+          echo "c19be78b5f00d8d29a25da41042cb7afa094cb6280a225abe614b03b20029ab  $RUNNER_TEMP/llama-xcframework.zip" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/llama-xcframework.zip" -d "$RUNNER_TEMP/llama-unpacked"
+          FRAMEWORK="$(find "$RUNNER_TEMP/llama-unpacked" -name llama.xcframework -type d -print -quit)"
+          test -n "$FRAMEWORK"
+          cp -R "$FRAMEWORK" ./llama.xcframework
+          plutil -lint llama.xcframework/Info.plist
+
       - name: Generate app icons and Xcode project
         shell: bash
         run: |

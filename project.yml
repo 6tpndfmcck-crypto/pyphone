@@ -2,7 +2,7 @@ name: PyPhone
 options:
   bundleIdPrefix: com.example
   deploymentTarget:
-    iOS: "16.0"
+    iOS: "16.4"
 targets:
   PyPhone:
     type: application
@@ -23,6 +23,8 @@ targets:
       - framework: PygameDependencies.xcframework
         embed: true
         codeSign: true
+      - framework: llama.xcframework
+        embed: false
     info:
       path: sources/Info.plist
       properties:
