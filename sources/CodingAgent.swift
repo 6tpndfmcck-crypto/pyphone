@@ -65,11 +65,33 @@ struct AgentProvider {
         request.timeoutInterval = 60
         request.setValue("Bearer " + key, forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONSerialization.data(withJSONObject: ["model": model, "messages": messages, "max_tokens": 4096])
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-            throw AgentFailure(message: status == 429 ? "Rate limited. Wait before retrying; no model fallback was used." : "Provider HTTP error \(status). Check key, model, and connection.")
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: ["model": model, "messages": messages, "max_tokens": 4096])
+        } catch {
+            // Never expose request payloads: they contain source code and tool results.
+            throw AgentFailure(message: "Could not encode the provider request as JSON.")
+        }
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await URLSession.shared.data(for: request)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let error as URLError {
+            throw AgentFailure(message: "Provider network request failed (URL error \(error.code.rawValue)). Check connectivity and retry.")
+        } catch {
+            // Foundation's localized descriptions can be vague, e.g. "incorrect format".
+            // Report the failure stage without printing server or model payloads.
+            throw AgentFailure(message: "Provider transport failed before an HTTP response was received.")
+        }
+        guard let http = response as? HTTPURLResponse else {
+            throw AgentFailure(message: "Provider returned a non-HTTP response.")
+        }
+        guard http.statusCode == 200 else {
+            if http.statusCode == 429 {
+                throw AgentFailure(message: "Rate limited (HTTP 429). Wait before retrying; no model fallback was used.")
+            }
+            throw AgentFailure(message: "Provider HTTP error \(http.statusCode). Check key, model ID, and provider availability.")
         }
         return try Self.parseResponse(data)
     }
@@ -84,16 +106,39 @@ struct AgentProvider {
             throw AgentProtocolError("Provider response is missing a nonempty choices array")
         }
         guard let reason = choice["finish_reason"] as? String else {
-            throw AgentProtocolError("Provider choices[0].finish_reason must be a string")
+            throw AgentProtocolError("Provider choices[0].finish_reason is missing or invalid")
         }
         guard reason == "stop" else {
-            throw AgentProtocolError(reason == "length" ? "Provider response was truncated (token limit); return a shorter complete action" : "Provider response did not finish normally; expected finish_reason stop")
+            switch reason {
+            case "length":
+                throw AgentProtocolError("Provider output was truncated by its token limit; the requested edit may be too large")
+            case "tool_calls", "function_call":
+                throw AgentProtocolError("Provider returned native tool calls; PyPhone expects one JSON action in message.content")
+            case "content_filter":
+                throw AgentProtocolError("Provider stopped because of a content filter")
+            default:
+                throw AgentProtocolError("Provider stopped without a complete action (finish_reason not stop)")
+            }
         }
-        guard let message = choice["message"] as? [String: Any],
-              let content = message["content"] as? String else {
-            throw AgentProtocolError("Provider choices[0].message.content must be a string")
+        guard let message = choice["message"] as? [String: Any] else {
+            throw AgentProtocolError("Provider choices[0].message must be an object")
         }
-        return content
+        if let content = message["content"] as? String {
+            guard !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw AgentProtocolError("Provider returned empty message.content")
+            }
+            return content
+        }
+        // Some OpenAI-compatible providers encode plain text as content parts.
+        if let parts = message["content"] as? [[String: Any]],
+           !parts.isEmpty,
+           parts.allSatisfy({ ($0["type"] as? String) == "text" && $0["text"] is String }) {
+            return parts.compactMap { $0["text"] as? String }.joined()
+        }
+        if message["tool_calls"] != nil {
+            throw AgentProtocolError("Provider returned native tool calls instead of JSON text")
+        }
+        throw AgentProtocolError("Provider message.content is missing or not plain text")
     }
 }
 
