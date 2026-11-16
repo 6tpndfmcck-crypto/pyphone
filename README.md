@@ -163,7 +163,7 @@ This creates `notes.txt` beside your scripts. For a subfolder, use a relative pa
 
 ### Autosave and recovery
 
-Edits retain a pending recovery draft immediately, then save to disk after about 0.4 seconds of inactivity. PyPhone also saves before running code, switching or creating files, and leaving the active app.
+Edits retain a pending recovery draft immediately, then save to disk after about 0.4 seconds of inactivity. pyphone also saves before running code, switching or creating files, and leaving the active app.
 
 Script writes are atomic. If a save fails, the draft remains available and file actions that would discard it are blocked. If an external iOS Files edit conflicts with a pending draft, PyPhone saves a separate recovered copy instead of silently overwriting the external version. Pending drafts can also be recovered after an interrupted session.
 
