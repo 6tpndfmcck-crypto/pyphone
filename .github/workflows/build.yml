@@ -311,7 +311,7 @@ jobs:
             echo "llama.framework was not embedded in PyPhone.app"
             exit 1
           }
-          xcrun lipo -verify_arch arm64 "$APP_PATH/Frameworks/llama.framework/llama"
+          xcrun lipo "$APP_PATH/Frameworks/llama.framework/llama" -verify_arch arm64
           xcrun otool -L "$APP_PATH/Frameworks/llama.framework/llama"
           test -f "$APP_PATH/python/lib/python3.15/encodings/__init__.py"
           test -f "$APP_PATH/python/lib/python3.15/datetime.py"
