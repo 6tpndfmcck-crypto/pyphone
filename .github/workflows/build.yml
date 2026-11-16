@@ -216,7 +216,9 @@ jobs:
           curl --fail --location --retry 3 \
             https://github.com/ggml-org/llama.cpp/releases/download/b5046/llama-b5046-xcframework.zip \
             --output "$RUNNER_TEMP/llama-xcframework.zip"
-          # The previous hardcoded SHA-256 was only 63 hex characters and could never validate.\n          # Verify ZIP integrity instead; use a verified upstream digest when one is available.\n          unzip -tq "$RUNNER_TEMP/llama-xcframework.zip"
+          # The previous hardcoded SHA-256 was only 63 hex characters and could never validate.
+          # Verify ZIP integrity instead; use a verified upstream digest when one is available.
+          unzip -tq "$RUNNER_TEMP/llama-xcframework.zip"
           unzip -q "$RUNNER_TEMP/llama-xcframework.zip" -d "$RUNNER_TEMP/llama-unpacked"
           FRAMEWORK="$(find "$RUNNER_TEMP/llama-unpacked" -name llama.xcframework -type d -print -quit)"
           test -n "$FRAMEWORK"
