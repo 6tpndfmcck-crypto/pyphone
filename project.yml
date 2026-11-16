@@ -24,7 +24,8 @@ targets:
         embed: true
         codeSign: true
       - framework: llama.xcframework
-        embed: false
+        embed: true
+        codeSign: true
     info:
       path: sources/Info.plist
       properties:

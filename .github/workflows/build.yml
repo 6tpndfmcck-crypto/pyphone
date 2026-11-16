@@ -307,6 +307,12 @@ jobs:
             find "$APP_PATH/Frameworks" -maxdepth 2 -iname '*sdl*' -print
             exit 1
           }
+          test -s "$APP_PATH/Frameworks/llama.framework/llama" || {
+            echo "llama.framework was not embedded in PyPhone.app"
+            exit 1
+          }
+          xcrun lipo -verify_arch arm64 "$APP_PATH/Frameworks/llama.framework/llama"
+          xcrun otool -L "$APP_PATH/Frameworks/llama.framework/llama"
           test -f "$APP_PATH/python/lib/python3.15/encodings/__init__.py"
           test -f "$APP_PATH/python/lib/python3.15/datetime.py"
           test -f "$APP_PATH/app_packages/numpy/__init__.py"
@@ -357,6 +363,9 @@ jobs:
           import hashlib, zipfile
           from pathlib import Path
           ipa = Path("PyPhone.ipa")
+          with zipfile.ZipFile(ipa) as packaged:
+              llama = packaged.getinfo("Payload/PyPhone.app/Frameworks/llama.framework/llama")
+              assert llama.file_size > 0, "Packaged llama framework is empty"
           archive = Path("PyPhone_ipa.zip")
           original_hash = hashlib.sha256(ipa.read_bytes()).hexdigest()
           with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_STORED) as zf:
