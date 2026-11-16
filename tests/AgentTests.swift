@@ -62,6 +62,29 @@ extension AgentTests {
         }
     }
 
+    func testProviderAcceptsTextContentParts() throws {
+        let envelope = #"""
+        {"choices":[{"finish_reason":"stop","message":{"content":[{"type":"text","text":"{\\"tool\\":\\"report\\","},{"type":"text","text":",\\"arguments\\":{\\"text\\":\\"OK\\"}}"}]}}]}
+        """#
+        let content = try AgentProvider.parseResponse(Data(envelope.utf8))
+        XCTAssertEqual(try AgentAction.parse(content).tool, "report")
+    }
+
+    func testProviderRejectsNativeToolsAndEmptyContentWithoutEcho() {
+        let cases = [
+            (#"{"choices":[{"finish_reason":"tool_calls","message":{"content":null,"tool_calls":[{"secret":"SECRET"}]}}]}"#, "native tool calls"),
+            (#"{"choices":[{"finish_reason":"stop","message":{"content":null,"tool_calls":[{"secret":"SECRET"}]}}]}"#, "native tool calls"),
+            (#"{"choices":[{"finish_reason":"stop","message":{"content":""}}]}"#, "empty"),
+            (#"{"choices":[{"finish_reason":"length","message":{"content":"SECRET"}}]}"#, "truncated")
+        ]
+        for (input, expected) in cases {
+            XCTAssertThrowsError(try AgentProvider.parseResponse(Data(input.utf8))) { error in
+                XCTAssertTrue(error.localizedDescription.contains(expected), error.localizedDescription)
+                XCTAssertFalse(error.localizedDescription.contains("SECRET"))
+            }
+        }
+    }
+
     @MainActor func testRecoveryValidatesBeforeReturningAction() async throws {
         var messages = [["role": "user", "content": "Read the script"]]
         var retries = 0
