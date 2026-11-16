@@ -553,7 +553,8 @@ controls unless the command's Python code explicitly changes them.
 Select a script in Files, then open Agent. Choose OpenRouter and enter an explicit
 currently available model ID ending in `:free` from OpenRouter's model catalog.
 No model is automatically selected: free model availability changes. Enter your
-API key and tap **Save key securely**, then **Test connection and JSON capability**.
+API key and tap **Save key securely**. Optionally use **Test connection and JSON capability**
+for a single API request; it is not required before sending a task.
 Keys are stored in the device-only iOS Keychain, never UserDefaults. OpenAI is
 optional and requires explicitly enabling paid API usage; there is no assumed
 free OpenAI API tier. There is no automatic model fallback or billing subscription.
@@ -568,6 +569,12 @@ network requests and pending approvals and requests a runtime interrupt.
 The loop permits 20 actions and at most five failed executions. Invalid JSON actions receive at most three protocol correction requests per task;
 no tool executes until the corrected action passes strict validation. A single
 JSON Markdown fence is accepted, but surrounding prose or multiple actions are not.
+The initial task includes the selected script (up to 100,000 characters), avoiding
+a separate model turn to request it. Search remains available for omitted lines.
+Run results already include output and the error line; the agent is instructed
+to use those directly. Truncated or content-filtered responses stop immediately
+instead of spending correction requests. Connection tests never auto-retry,
+and blank instructions do not start a task.
 Diagnostics identify schema failures without echoing rejected content or unknown keys.
 
 ### Scope and limitations

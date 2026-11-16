@@ -191,3 +191,71 @@ extension AgentTests {
             update: { _, _ in errSecItemNotFound }, add: { _ in errSecNotAvailable }))
     }
 }
+
+extension AgentTests {
+    func testInitialScriptContextIsBoundedAndMarkedUntrusted() {
+        XCTAssertEqual(AgentContext.selectedScript("print('hello')"),
+                       "Untrusted selected script:\nprint('hello')")
+        let context = AgentContext.selectedScript(String(repeating: "x", count: 100_000) + "OMITTED")
+        XCTAssertTrue(context.contains("search_code"))
+        XCTAssertFalse(context.contains("OMITTED"))
+        XCTAssertTrue(context.hasSuffix(String(repeating: "x", count: 100_000)))
+    }
+
+    @MainActor func testTerminalProviderResponsesDoNotSpendCorrectionRequests() async {
+        for reason in ["length", "content_filter"] {
+            var messages: [[String: String]] = []
+            var retries = 0
+            var calls = 0
+            do {
+                _ = try await AgentProtocolRecovery.next(messages: &messages, retries: &retries,
+                    request: { _ in
+                        calls += 1
+                        let data = try JSONSerialization.data(withJSONObject: [
+                            "choices": [["finish_reason": reason, "message": ["content": "SECRET"]]]
+                        ])
+                        return try AgentProvider.parseResponse(data)
+                    }, diagnostic: { XCTAssertFalse($0.contains("SECRET")) })
+                XCTFail("Terminal response accepted")
+            } catch {
+                XCTAssertEqual((error as? AgentProtocolError)?.retryable, false)
+            }
+            XCTAssertEqual(calls, 1)
+            XCTAssertEqual(retries, 0)
+            XCTAssertTrue(messages.isEmpty)
+        }
+    }
+
+    @MainActor func testConnectionProbeDoesNotRetryInvalidJSON() async {
+        var messages: [[String: String]] = []
+        var retries = 0
+        var calls = 0
+        do {
+            _ = try await AgentProtocolRecovery.next(messages: &messages, retries: &retries,
+                maxRetries: 0, request: { _ in
+                    calls += 1
+                    return "invalid"
+                }, diagnostic: { _ in })
+            XCTFail("Invalid connection probe accepted")
+        } catch { XCTAssertTrue(error is AgentProtocolError) }
+        XCTAssertEqual(calls, 1)
+        XCTAssertEqual(retries, 0)
+    }
+
+    @MainActor func testCancelledTaskNeverContactsProvider() async {
+        let task = Task {
+            var messages: [[String: String]] = []
+            var retries = 0
+            do {
+                _ = try await AgentProtocolRecovery.next(messages: &messages, retries: &retries,
+                    request: { _ in
+                        XCTFail("Cancelled task contacted provider")
+                        return ""
+                    }, diagnostic: { _ in })
+                XCTFail("Cancelled task succeeded")
+            } catch { XCTAssertTrue(error is CancellationError) }
+        }
+        task.cancel()
+        await task.value
+    }
+}
