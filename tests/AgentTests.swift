@@ -63,10 +63,16 @@ extension AgentTests {
     }
 
     func testProviderAcceptsTextContentParts() throws {
-        let envelope = #"""
-        {"choices":[{"finish_reason":"stop","message":{"content":[{"type":"text","text":"{\\"tool\\":\\"report\\","},{"type":"text","text":",\\"arguments\\":{\\"text\\":\\"OK\\"}}"}]}}]}
-        """#
-        let content = try AgentProvider.parseResponse(Data(envelope.utf8))
+        let action = #"{"tool":"report","arguments":{"text":"OK"}}"#
+        let pieces = [String(action.prefix(16)), String(action.dropFirst(16))]
+        let envelope: [String: Any] = [
+            "choices": [[
+                "finish_reason": "stop",
+                "message": ["content": pieces.map { ["type": "text", "text": $0] }]
+            ]]
+        ]
+        let data = try JSONSerialization.data(withJSONObject: envelope)
+        let content = try AgentProvider.parseResponse(data)
         XCTAssertEqual(try AgentAction.parse(content).tool, "report")
     }
 
