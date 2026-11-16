@@ -18,7 +18,7 @@ struct PyFile: FileDocument {
     }
 }
 
-enum WorkspaceTab: Hashable { case code, console, terminal, files, agent, aster }
+enum WorkspaceTab: Hashable { case code, console, terminal, files, agent }
 
 struct ContentView: View {
     @StateObject private var runner = Runner()
@@ -43,10 +43,8 @@ struct ContentView: View {
         VStack(spacing: 0) {
             header
             TabView(selection: $tab) {
-                AgentPane(store: scripts, runner: runner)
+                AgentPane(store: scripts, runner: runner, aster: aster)
                     .tabItem { Label("Agent", systemImage: "sparkles") }.tag(WorkspaceTab.agent)
-                AsterPane(session: aster)
-                    .tabItem { Label("Aster", systemImage: "brain.head.profile") }.tag(WorkspaceTab.aster)
                 editor.tabItem { Label("Code", systemImage: "chevron.left.forwardslash.chevron.right") }.tag(WorkspaceTab.code)
                 ConsolePane(runner: runner, fontSize: CGFloat(fontSize), goToError: canShowError ? goToError : nil)
                     .tabItem { Label("Console", systemImage: "terminal") }.tag(WorkspaceTab.console)

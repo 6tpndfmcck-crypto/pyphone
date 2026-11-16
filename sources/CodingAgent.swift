@@ -331,6 +331,7 @@ struct AgentAction {
 @MainActor struct AgentPane: View {
     @ObservedObject var store: ScriptStore
     @ObservedObject var runner: Runner
+    @ObservedObject var aster: AsterSession
     @StateObject private var agent = CodingAgent()
     @AppStorage("agent.provider") private var provider = "OpenRouter"
     @AppStorage("agent.model") private var model = ""
@@ -346,9 +347,19 @@ struct AgentAction {
                 Spacer()
                 Button("Stop Agent") { agent.stop() }
             }.padding(.horizontal)
+            Picker("AI Provider", selection: $provider) {
+                Text("OpenRouter").tag("OpenRouter")
+                Text("OpenAI").tag("OpenAI")
+                Text("Aster (Local)").tag("Aster (Local)")
+            }
+            .pickerStyle(.menu)
+            .padding(.horizontal)
+            .disabled(agent.busy || aster.busy)
+            if provider == "Aster (Local)" {
+                AsterPane(session: aster)
+            } else {
             Form {
                 Section("Provider") {
-                    Picker("Provider", selection: $provider) { Text("OpenRouter").tag("OpenRouter"); Text("OpenAI").tag("OpenAI") }
                     TextField("Exact model ID (use :free)", text: $model).textInputAutocapitalization(.never).autocorrectionDisabled()
                     SecureField("API key", text: $key)
                     Button("Save key securely") { do { try AgentKeychain.save(key, provider: provider); key = "" } catch { agent.log = error.localizedDescription } }
@@ -374,6 +385,7 @@ struct AgentAction {
                     Text(agent.log).font(.caption.monospaced()).textSelection(.enabled)
                     Button("Dismiss response") { agent.log = "" }.disabled(agent.busy)
                 }
+            }
             }
         }.onDisappear { agent.stop() }
     }
