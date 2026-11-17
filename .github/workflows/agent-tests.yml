@@ -1,0 +1,20 @@
+name: PyPhone agent protocol tests
+
+on:
+  push:
+    branches: [main]
+    paths: ['sources/AgentProtocol/**', 'sources/CodingAgent.swift', 'tests/AgentProtocol/**', 'Package.swift', '.github/workflows/agent-tests.yml']
+  pull_request:
+    paths: ['sources/AgentProtocol/**', 'sources/CodingAgent.swift', 'tests/AgentProtocol/**', 'Package.swift', '.github/workflows/agent-tests.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: macos-15-intel
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test request budgets, parsing, patches, and bounded recovery
+        run: swift test

@@ -22,7 +22,9 @@ targets:
       - sources/WorkspacePanes.swift
       - sources/Runner.swift
       - sources/CodingAgent.swift
+      - sources/AgentProtocol
       - tests/AgentTests.swift
+      - tests/AgentProtocol
       - tests/ScrollingTests.swift
       - tests/WorkspaceTests.swift
       - tests/RunnerImageTests.swift
