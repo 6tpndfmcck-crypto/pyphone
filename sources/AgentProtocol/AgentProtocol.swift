@@ -42,7 +42,9 @@ struct AgentProvider {
         }
         if ["tool_calls", "function_call"].contains(where: { key in
             guard let value = message[key] else { return false }
-            return !(value is NSNull)
+            if value is NSNull { return false }
+            if key == "tool_calls", let calls = value as? [Any], calls.isEmpty { return false }
+            return true
         }) {
             throw AgentProtocolError("Provider returned native tool calls instead of JSON text")
         }

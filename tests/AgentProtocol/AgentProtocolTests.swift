@@ -340,7 +340,7 @@ extension AgentProtocolTests {
     func testRejectsEmptyPartsAndMixedNativeCalls() throws {
         let messages: [[String: Any]] = [
             ["content": [["type": "text", "text": " \n"]]],
-            ["content": "valid-looking text", "tool_calls": []],
+            ["content": "valid-looking text", "tool_calls": [["id": "SECRET"]]],
             ["content": "valid-looking text", "function_call": ["name": "SECRET"]]
         ]
         for message in messages {
@@ -357,6 +357,8 @@ extension AgentProtocolTests {
     func testNullNativeToolFieldsStillAllowText() throws {
         let data = Data(#"{"choices":[{"finish_reason":"stop","message":{"content":"hello","tool_calls":null,"function_call":null}}]}"#.utf8)
         XCTAssertEqual(try AgentProvider.parseResponse(data), "hello")
+        let emptyCalls = Data(#"{"choices":[{"finish_reason":"stop","message":{"content":"hello","tool_calls":[]}}]}"#.utf8)
+        XCTAssertEqual(try AgentProvider.parseResponse(emptyCalls), "hello")
     }
 
     @MainActor func testOversizedEditIsRetriedAsPatch() async throws {
